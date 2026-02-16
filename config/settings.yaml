@@ -1,0 +1,126 @@
+# ── Novel metadata ──────────────────────────────────────────────
+novel:
+  title: "Tribulation of Myriad Races"
+  author: "Eagle Eats Chicken"
+  base_url: "https://lightnovelpub.org/novel/tribulation-of-myriad-races"
+  chapter_url_template: "{base_url}/chapter/{n}/"
+
+# ── Scraper ─────────────────────────────────────────────────────
+scraper:
+  delay: 1.5
+  retries: 3
+  timeout: 25
+  min_length: 200
+  content_selectors:
+    - "#chapter-content"
+    - ".chapter-content"
+    - "#chr-content"
+    - "#chapter-container"
+    - ".reading-content"
+    - "article.chapter"
+  ui_stop_keywords:
+    - comment
+    - comments
+    - disqus
+    - reply
+    - respond
+    - share
+    - btn
+    - button
+    - nav
+    - next
+    - prev
+    - menu
+    - footer
+    - header
+    - ads
+    - ad
+    - advert
+    - rating
+    - review
+    - donate
+    - bookmark
+    - widget
+
+# ── Translation ─────────────────────────────────────────────────
+translation:
+  chunk_chars: 7000
+  max_concurrent: 3
+  temperature: 0.2
+  timeout: 120
+  retries: 3
+  backoff: 1.8
+
+# ── Glossaries ──────────────────────────────────────────────────
+glossary:
+  translation_glossary: "config/translation_glossary.json"
+  ingest_glossary: "config/ingest_glossary.json"
+
+# ── Adapter config ──────────────────────────────────────────────
+adapter:
+  active: "gemini"
+  gemini:
+    model: "gemini-2.0-flash"
+    api_key_env: "GEMINI_API_KEY"
+  openai:
+    model: "gpt-4o-mini"
+    api_key_env: "OPENAI_API_KEY"
+  ollama:
+    model: "qwen2.5:7b"
+    base_url: "http://localhost:11434"
+
+# ── System prompt ───────────────────────────────────────────────
+prompt:
+  preamble: |
+    Eres un traductor literario del inglés al español neutro, estándar para América.
+    Traduce TODO el contenido al español. No copies frases en inglés ni dejes palabras en inglés
+    salvo los tokens de protección exactos.
+    Traduce con fidelidad, sin resumir ni explicar; conserva el tono, ritmo y matices narrativos del texto original.
+    Preserva párrafos y líneas en blanco exactamente como en el original (no combines ni dividas).
+    No agregues notas, aclaraciones ni comentarios meta.
+    Traduce los títulos de capítulo al formato 'Capítulo N: …' cuando el original use 'Chapter N: …'.
+    Usa español neutro habitual en América: evita 'vosotros', 'vale', 'coger' (usa 'ustedes', 'de acuerdo', 'tomar').
+
+  translation_rules:
+    - >-
+      No traduzcas nombres propios de PERSONAS, LUGARES específicos, ni términos
+      únicos sin traducción natural. Pero SÍ traduce nombres de reinos, países,
+      sectas, clanes u organizaciones cuando su traducción literal al español sea
+      semánticamente correcta.
+    - >-
+      Traduce términos de poderes, habilidades, niveles de cultivo, técnicas,
+      estados, armas genéricas y conceptos del sistema, respetando las
+      traducciones exactas definidas en el glosario.
+    - El glosario tiene prioridad sobre todas las reglas.
+    - Respeta las mayúsculas y minúsculas de los nombres propios no traducidos.
+    - Usa puntuación y tildes propias del español.
+    - >-
+      Conserva el formato de diálogos; si el original usa comillas, mantenlas.
+      Sé consistente por capítulo.
+    - >-
+      Muy importante: NO modifiques, traduzcas ni reordenes tokens de marcador
+      con el patrón PROTECT. Déjalos idénticos en la salida, sin espacios extra
+      dentro de los corchetes.
+    - Mantén los números y fechas sin alterar.
+
+  user_template: "Traduce fielmente el siguiente fragmento. Responde EN ESPAÑOL. Devuelve SOLO el texto traducido, sin notas ni etiquetas.\n\n{text}"
+
+# ── Output ──────────────────────────────────────────────────────
+output:
+  default_input_dir: "output/tribulation-of-myriad-races"
+  default_output_dir: "traduccion"
+  pdf:
+    block_size: 50
+    font_regular: "fonts/times-new-roman.ttf"
+    font_italic: "fonts/times-new-roman-italic.ttf"
+    font_bold: "fonts/times-new-roman-bold.ttf"
+    basename: "novela"
+    title_keywords:
+      - "Capítulo"
+      - "Capitulo"
+  epub:
+    block_size: 50
+    basename: "novela"
+    title_keywords:
+      - "Capítulo"
+      - "Capitulo"

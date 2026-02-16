@@ -1,10 +1,14 @@
+# Core
+pydantic>=2.0
+pyyaml
+google-genai
 requests
 beautifulsoup4
-spacy
-argostranslate
-pandas
-numpy
-scikit-learn
-tqdm
 lxml
+cloudscraper
+tqdm
 python-dotenv
+
+# PDF/EPUB (optional)
+fpdf2
+ebooklib
