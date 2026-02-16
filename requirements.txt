@@ -1,10 +1,10 @@
-requests>=2.31.0
-beautifulsoup4>=4.12.2
-lxml>=4.9.3
-# Opcional para bypass de Cloudflare si es necesario
-cloudscraper>=1.2.71
-
-# Traducción (API OpenAI)
-openai>=1.40.0
-fpdf2>=2.7.9
-ebooklib>=0.18
+requests
+beautifulsoup4
+spacy
+argostranslate
+pandas
+numpy
+scikit-learn
+tqdm
+lxml
+python-dotenv
