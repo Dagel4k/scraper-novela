@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+
+# OS
+.DS_Store
+
+# Project specific
+output/
+logs/
+traduccion copy/
+traduccion copy 2/
+traduccion_ollama_test/
+TXT_Notebook/
