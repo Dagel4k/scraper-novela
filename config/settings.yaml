@@ -107,7 +107,7 @@ prompt:
 
 # ── Output ──────────────────────────────────────────────────────
 output:
-  default_input_dir: "output/tribulation-of-myriad-races"
+  default_input_dir: "output/tribulation"
   default_output_dir: "traduccion"
   pdf:
     block_size: 50

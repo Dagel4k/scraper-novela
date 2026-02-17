@@ -13,6 +13,14 @@ def get_adapter(name: str, config: dict) -> TranslatorAdapter:
         model = gemini_cfg.get("model", "gemini-2.0-flash")
         return GeminiAdapter(model=model, api_key=api_key)
 
+    if name == "openai":
+        from adapters.openai_adapter import OpenAIAdapter
+
+        openai_cfg = config.get("openai", {})
+        api_key = os.environ.get(openai_cfg.get("api_key_env", "OPENAI_API_KEY"))
+        model = openai_cfg.get("model", "gpt-4o-mini")
+        return OpenAIAdapter(model=model, api_key=api_key)
+
     raise ValueError(
-        f"Adapter desconocido: '{name}'. Disponibles: gemini"
+        f"Adapter desconocido: '{name}'. Disponibles: gemini, openai"
     )

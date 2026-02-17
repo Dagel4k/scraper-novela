@@ -57,36 +57,6 @@ class NovelScraper:
             finally:
                 browser.close()
 
-    def scrape_chapter(self, page, chapter):
-        filename = os.path.join(self.output_dir, f"cn_{chapter['index']:04d}.txt")
-        if os.path.exists(filename):
-            return True
-
-        try:
-            page.goto(chapter['url'], wait_until="domcontentloaded", timeout=20000)
-            # Try to click away any overlays if they appear (rare on 69shu but possible)
-            
-            # Content selector: "div.txtnav"
-            content_element = page.query_selector('div.txtnav')
-            if not content_element:
-                # Retry once after a short wait
-                time.sleep(2)
-                content_element = page.query_selector('div.txtnav')
-            
-            if not content_element:
-                print(f"Warning: Could not find content for chapter {chapter['index']}")
-                return False
-
-            text = content_element.inner_text().strip()
-            
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(f"Chapter {chapter['index']}: {chapter['title']}\n\n")
-                f.write(text)
-            
-            return True
-        except Exception as e:
-            print(f"Error scraping chapter {chapter['index']}: {e}")
-            return False
 
     def run(self, start_chapter=1, end_chapter=None):
         chapters = self.get_chapter_list()
@@ -107,15 +77,57 @@ class NovelScraper:
             page = context.new_page()
             
             for chapter in tqdm(target_chapters):
-                success = self.scrape_chapter(page, chapter)
-                if success:
-                    # Random delay to look human
-                    time.sleep(random.uniform(1.0, 3.0))
-                else:
-                    # Longer wait on failure
-                    time.sleep(5)
+                # Retry logic
+                for attempt in range(3):
+                    success = self.scrape_chapter(page, chapter)
+                    if success:
+                        time.sleep(random.uniform(1.0, 3.0))
+                        break
+                    else:
+                        print(f"Retrying chapter {chapter['index']} (Attempt {attempt+1}/3)...")
+                        time.sleep(5)
             
             browser.close()
+
+    def scrape_chapter(self, page, chapter):
+        filename = os.path.join(self.output_dir, f"cn_{chapter['index']:04d}.txt")
+        if os.path.exists(filename):
+            return True
+
+        try:
+            page.goto(chapter['url'], wait_until="domcontentloaded", timeout=30000)
+            
+            # Selector hierarchy
+            selectors = ['div.txtnav', '#content', 'div.content']
+            content_element = None
+            
+            for selector in selectors:
+                try:
+                    page.wait_for_selector(selector, timeout=2000)
+                    content_element = page.query_selector(selector)
+                    if content_element:
+                        break
+                except:
+                    continue
+            
+            if not content_element:
+                print(f"Warning: Could not find content for chapter {chapter['index']}")
+                return False
+
+            text = content_element.inner_text().strip()
+            
+            # Remove "69shu" ads if present
+            lines = [line for line in text.split('\n') if "69书吧" not in line]
+            text = "\n".join(lines)
+            
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"Chapter {chapter['index']}: {chapter['title']}\n\n")
+                f.write(text)
+            
+            return True
+        except Exception as e:
+            print(f"Error scraping chapter {chapter['index']}: {e}")
+            return False
 
 if __name__ == "__main__":
     BOOK_ID = "30966"
@@ -123,5 +135,5 @@ if __name__ == "__main__":
     OUTPUT_DIR = "data/cn_raws"
     
     scraper = NovelScraper(BOOK_URL, OUTPUT_DIR)
-    # Scrape first 50 chapters for testing alignment
-    scraper.run(start_chapter=1, end_chapter=50)
+    # Scrape full available corpus
+    scraper.run(start_chapter=1, end_chapter=1200) # Buffer for 900+

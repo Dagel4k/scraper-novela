@@ -56,6 +56,18 @@ class NovelTranslator:
             if cn not in self.verified_glossary:
                 self.verified_glossary[cn] = en
 
+        # Load dynamic glossary from glossary.json
+        if glossary_path and os.path.exists(glossary_path):
+            with open(glossary_path, 'r', encoding='utf-8') as f:
+                dynamic_glossary_en_cn = json.load(f)
+            
+            # Reverse to CN -> EN
+            for en, cn in dynamic_glossary_en_cn.items():
+                if cn not in self.verified_glossary:
+                    self.verified_glossary[cn] = en
+            
+            print(f"Loaded {len(dynamic_glossary_en_cn)} dynamic terms.")
+
     def translate_internal(self, text, from_code, to_code):
         try:
             return argostranslate.translate.translate(text, from_code, to_code)
@@ -70,7 +82,7 @@ class NovelTranslator:
         
         for i, cn_term in enumerate(sorted_cn_terms):
             eng_term = self.verified_glossary[cn_term]
-            token = f"ZPROPER_NAME_{i:03d}Z" # More unique, using padding to avoid prefix issues
+            token = f"X{i}X" # Simpler token: X123X. No spaces, distinct.
             placeholders[token] = eng_term
             processed_text = processed_text.replace(cn_term, token)
             
@@ -78,41 +90,38 @@ class NovelTranslator:
 
     def preserve_terms_post(self, text, placeholders):
         final_text = text
-        # Sort tokens by length descending (if they varied) to be safe, 
-        # but with Z...Z they are all same length.
-        # Still, we must avoid MT translation of ZPROPER_NAME
-        
         for token, eng_term in placeholders.items():
-            # The MT engine might have changed "ZPROPER_NAME" to something else, 
-            # or removed the 'Z', or added spaces.
-            # We look for the index padded with 0s.
-            match = re.search(r'ZPROPER_NAME_(\d+)Z', token)
-            if match:
-                idx = match.group(1)
-                # Regex logic: Match any variation of Z PROPER NAME [idx] Z
-                # Allow for spaces after Z, or underscores
-                pattern_str = r'Z[ _-]*PROPER[ _-]*NAME[ _-]*' + re.escape(idx) + r'[ _-]*Z'
-                pattern = re.compile(pattern_str, re.IGNORECASE)
-                final_text = pattern.sub(eng_term, final_text)
-            else:
-                # Fallback
-                final_text = final_text.replace(token, eng_term)
+            # Robust regex to catch X 123 X variations introduced by MT
+            # Match X followed by optional spaces, then ID, then optional spaces, then X
+            # Token format is X{i}X
+            idx = token[1:-1] # Extract ID from X...X
+            
+            # Pattern: X \s* ID \s* X
+            pattern_str = r'X\s*' + re.escape(idx) + r'\s*X'
+            pattern = re.compile(pattern_str, re.IGNORECASE)
+            
+            final_text = pattern.sub(eng_term, final_text)
+            
         return final_text
 
-    def translate_chapter(self, cn_text):
+    def translate_chapter(self, cn_text, debug=False):
         if not cn_text.strip(): return ""
         
         # 1. Pre-process Chinese with tokens
         processed_cn, placeholders = self.preserve_terms_pre(cn_text)
+        if debug: print(f"DEBUG [CN+Tokens]: {processed_cn[:100]}...")
         
         # 2. Chinese (with tokens) -> English
         en_text = self.translate_internal(processed_cn, "zh", "en")
+        if debug: print(f"DEBUG [EN+Tokens]: {en_text[:100]}...")
         
         # 3. English (with tokens) -> Spanish
         es_text = self.translate_internal(en_text, "en", "es")
+        if debug: print(f"DEBUG [ES+Tokens]: {es_text[:100]}...")
         
         # 4. Restore terms into final Spanish text
         final_es = self.preserve_terms_post(es_text, placeholders)
+        if debug: print(f"DEBUG [Final]: {final_es[:100]}...")
         
         return final_es
 
@@ -122,7 +131,7 @@ class NovelTranslator:
             
         files = sorted([f for f in os.listdir(cn_dir) if f.startswith('cn_') and f.endswith('.txt')])[:limit]
         
-        for file in tqdm(files, desc="Translating to Spanish"):
+        for i, file in enumerate(tqdm(files, desc="Translating to Spanish")):
             input_path = os.path.join(cn_dir, file)
             output_name = file.replace('cn_', 'es_')
             output_path = os.path.join(output_dir, output_name)
@@ -130,11 +139,16 @@ class NovelTranslator:
             with open(input_path, 'r', encoding='utf-8') as f:
                 cn_content = f.read()
             
+            # Debug first paragraph of first file
+            is_first = (i == 0)
+            
             paragraphs = cn_content.split('\n')
             es_paragraphs = []
-            for p in paragraphs:
+            for j, p in enumerate(paragraphs):
                 if p.strip():
-                    es_paragraphs.append(self.translate_chapter(p))
+                    # Check if it's a substantive paragraph for debug
+                    debug_this = (is_first and j < 3 and len(p) > 20)
+                    es_paragraphs.append(self.translate_chapter(p, debug=debug_this))
                 else:
                     es_paragraphs.append("")
             
@@ -147,7 +161,7 @@ if __name__ == "__main__":
     CN_DIR = "data/cn_raws"
     OUTPUT_DIR = "data/es_translations"
     
-    translator = NovelTranslator()
+    translator = NovelTranslator(glossary_path="data/glossary.json")
     print("Running FINAL Robust Translation Batch...")
-    translator.batch_translate(CN_DIR, OUTPUT_DIR, limit=5)
+    translator.batch_translate(CN_DIR, OUTPUT_DIR, limit=1)
     print(f"Batch Done! check {OUTPUT_DIR}")

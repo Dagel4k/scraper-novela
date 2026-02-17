@@ -66,59 +66,117 @@ class NovelAligner:
         if not self.eng_chapters or not self.cn_chapters:
             return {}
 
-        anchors = {
+        # High-weight unique anchors
+        unique_anchors = {
+            "Liu Wenyan": "柳文彦",
+            "Chen Hao": "陈浩",
+            "Xia Longwu": "夏龙武",
+            "Marquis Xia": "夏侯",
+            "White Feng": "白枫",
+            "Wu Wenhai": "吴文海",
+            "Lightning Source Blade": "雷元刀",
+            "Myriad Race Cult": "万族教",
+            "Divine Character": "神文",
+            "Cultural Research Academy": "文明学府",
+            "War Academy": "战争学府",
+            "Devil Subduing Army": "镇魔军",
+            "Martial Dragon Guards": "龙武卫",
+            "Willpower": "意志力",
+            "Allheaven": "诸天",
+            "Source Opening": "开元",
+            "Great Strength": "千钧",
+            "Infinite Strength": "万石",
+            "Skysoar": "腾空",
+            "Cloudstep": "凌云",
+            "Mountainsea": "山海",
+            "Sun and Moon": "日月",
+            "Nanyuan": "南元",
+            "Great Xia": "大夏",
             "Su Yu": "苏宇",
             "Su Long": "苏龙",
-            "Liu Wenyan": "柳文彦",
-            "Nanyuan": "南元"
+            "Liu Peng": "刘鹏",
+            "Xia Bing": "夏冰",
+            "Wu Lan": "吴岚",
+            "Zhu Tiandao": "朱天道",
+            "Iron-winged bird": "铁翼鸟",
+            "Rumble lightning beast": "霹雳雷霆兽"
         }
+        
+        # Observed ratio: CN chapter 48 is EN chapter 72.
+        # 48 / 72 = 0.666...
+        cn_en_ratio = 48.0 / 72.0
         
         current_cn_ptr = 0
         
-        for eng in tqdm(self.eng_chapters, desc="Aligning"):
+        for i, eng in enumerate(tqdm(self.eng_chapters, desc="Aligning")):
             eng_num = eng['num']
+            eng_text = eng['text']
             
-            # Find the best Chinese chapter in a reasonable window around the current pointer
-            # We look at up to 10 Chinese chapters from the current one
+            # Detect split parts
+            first_lines = "\n".join(eng_text.splitlines()[:15])
+            is_split_part = bool(re.search(r'\((2|3|4|5|6|7|8|9)\)', first_lines))
+            
             best_cn_idx = current_cn_ptr
             max_score = -999999
             
-            # Since translations can be behind (Eng 10 maps to CN 9), 
-            # we allow for some offset.
+            # Prediction logic based on historical ratio
+            if is_split_part:
+                predicted_cn_num = self.cn_chapters[current_cn_ptr]['num']
+            else:
+                # Use the global ratio as a baseline
+                predicted_cn_num = round(eng_num * cn_en_ratio)
+                if predicted_cn_num < 1:
+                    predicted_cn_num = 1
+                
+                # Ensure it doesn't stay behind the last picked chapter if not split
+                last_picked_cn = self.cn_chapters[current_cn_ptr]['num']
+                if predicted_cn_num < last_picked_cn:
+                    predicted_cn_num = last_picked_cn
             
-            # Search window: [current, current + 5]
-            window_size = 5
-            end_idx = min(len(self.cn_chapters), current_cn_ptr + window_size)
+            # Search window
+            if current_cn_ptr >= len(self.cn_chapters) - 1:
+                mapping[str(eng_num)] = self.cn_chapters[-1]['num']
+                continue
+
+            # Larger window because the ratio might vary locally
+            start_search = max(0, current_cn_ptr - 5)
+            window_size = 25 
+            end_search = min(len(self.cn_chapters), current_cn_ptr + window_size)
             
-            for idx in range(current_cn_ptr, end_idx):
+            for idx in range(start_search, end_search):
                 cn = self.cn_chapters[idx]
                 cn_num = cn['num']
+                cn_text = cn['text']
                 
-                # Base score: inverse distance of chapter numbers
-                # Highly weighted to keep numbers roughly aligned
-                score = -abs(eng_num - cn_num) * 10
+                # 1. Sequence Score (Softened)
+                dist = abs(cn_num - predicted_cn_num)
+                num_score = -dist * 40 # Less severe penalty to allow anchor matching
                 
-                # Bonus for anchor matching (tie breaker and validation)
-                for en_name, cn_name in anchors.items():
-                    if en_name in eng['text'] and cn_name in cn['text']:
-                        score += 2
+                # 2. Anchor match
+                anchor_score = 0
+                for en_name, cn_name in unique_anchors.items():
+                    if en_name in eng_text and cn_name in cn_text:
+                        weight = 15
+                        if en_name in ["Wu Lan", "Liu Wenyan", "White Feng", "Lightning Source Blade"]:
+                            weight = 50
+                        anchor_score += weight
                 
-                # Bonus if it's the SAME Chinese chapter as we are currently on (1-to-N)
-                if idx == current_cn_ptr:
-                    score += 5
+                # 3. Continuity bonus
+                cont_bonus = 0
+                if is_split_part:
+                    if idx == current_cn_ptr:
+                        cont_bonus = 120
+                else:
+                    if idx == current_cn_ptr + 1:
+                        cont_bonus = 30
+                    elif idx == current_cn_ptr:
+                        cont_bonus = 10
+                
+                total_score = num_score + anchor_score + cont_bonus
 
-                if score > max_score:
-                    max_score = score
+                if total_score > max_score:
+                    max_score = total_score
                     best_cn_idx = idx
-
-            # If the best one is at the end of our raws, we continue mapping to it
-            # until we eventually stop if the score gets too bad? 
-            # Actually, the user wants us to stop if we run out.
-            
-            # Stop if the chapter number gap is too large (> 5)
-            if abs(eng_num - self.cn_chapters[best_cn_idx]['num']) > 20 and eng_num > 50:
-                # Stop mapping if we are clearly out of range
-                break
 
             mapping[str(eng_num)] = self.cn_chapters[best_cn_idx]['num']
             current_cn_ptr = best_cn_idx
