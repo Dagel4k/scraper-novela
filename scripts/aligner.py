@@ -12,22 +12,23 @@ class NovelAligner:
 
     def load_eng_chapters(self):
         print("Loading English chapters...")
-        files = sorted([f for f in os.listdir(self.eng_dir) if f.startswith('novel_') and f.endswith('.txt')])
+        files = sorted([f for f in os.listdir(self.eng_dir) if f.endswith('_en.txt')])
         
         for file in files:
             path = os.path.join(self.eng_dir, file)
+            # Filename format: 1850_en.txt or 0001_en.txt
+            try:
+                ch_num = int(file.split('_')[0])
+            except ValueError:
+                continue
+
             with open(path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
-            chunks = re.split(r'={10,}', content)
-            for chunk in chunks:
-                match = re.search(r'Chapter (\d+)', chunk)
-                if match:
-                    ch_num = int(match.group(1))
-                    self.eng_chapters.append({
-                        'num': ch_num,
-                        'text': chunk.strip()
-                    })
+            self.eng_chapters.append({
+                'num': ch_num,
+                'text': content.strip()
+            })
         
         self.eng_chapters.sort(key=lambda x: x['num'])
         print(f"Loaded {len(self.eng_chapters)} English chapters.")
@@ -41,12 +42,12 @@ class NovelAligner:
             with open(path, 'r', encoding='utf-8') as f:
                 content = f.read()
             
-            # Key priority: "第X章"
-            match = re.search(r'第(\d+)章', content)
-            if match:
-                ch_num = int(match.group(1))
+            # Filename format: cn_0001.txt
+            m = re.match(r'cn_(\d+)\.txt', file)
+            if m:
+                ch_num = int(m.group(1))
             else:
-                # Fallback to any number in the first part
+                 # Fallback to any number in the first part
                 m2 = re.search(r'(\d+)', content[:100])
                 ch_num = int(m2.group(1)) if m2 else 0
 
@@ -97,13 +98,32 @@ class NovelAligner:
             "Liu Peng": "刘鹏",
             "Xia Bing": "夏冰",
             "Wu Lan": "吴岚",
+            "Zhao Chuan": "赵川",
+            "Talisman King": "符王",
+            "Marquis Lanshan": "岚山侯",
+            "Stable Army Marquis": "定军侯",
+            "Great Zhou King": "大周王",
+            "Friendly Su Yu": "和蔼的苏宇",
             "Zhu Tiandao": "朱天道",
             "Iron-winged bird": "铁翼鸟",
-            "Rumble lightning beast": "霹雳雷霆兽"
+            "Rumble lightning beast": "霹雳雷霆兽",
+            # Late novel anchors (Upper Realm arc)
+            "Dingjun Marquis": "定军侯",
+            "Lanshan Marquis": "岚山侯",
+            "Zhennan Marquis": "镇南侯",
+            "Minshan Marquis": "岷山侯",
+            "Firecloud Marquis": "火云侯",
+            "Great Zhou King": "大周王",
+            "Wan Tiansheng": "万天圣",
+            "Blue Sky": "蓝天",
+            "Tianku": "天窟",
+            "Yixian": "一线",
+            "Upper Realm": "上界",
+            "Necropolis Realm": "死灵界",
+            "Human Sovereign": "人皇"
         }
         
-        # Observed ratio: CN chapter 48 is EN chapter 72.
-        # 48 / 72 = 0.666...
+        # Base ratio
         cn_en_ratio = 48.0 / 72.0
         
         current_cn_ptr = 0
@@ -124,41 +144,57 @@ class NovelAligner:
                 predicted_cn_num = self.cn_chapters[current_cn_ptr]['num']
             else:
                 # Use the global ratio as a baseline
-                predicted_cn_num = round(eng_num * cn_en_ratio)
+                # Adjust ratio to prevent "drifting high"
+                if eng_num < 200:
+                    effective_ratio = 48.0 / 72.0 # ~0.66
+                elif eng_num < 1000:
+                    effective_ratio = 0.5
+                else:
+                    effective_ratio = 0.38 
+
+                predicted_cn_num = round(eng_num * effective_ratio)
                 if predicted_cn_num < 1:
                     predicted_cn_num = 1
                 
                 # Ensure it doesn't stay behind the last picked chapter if not split
                 last_picked_cn = self.cn_chapters[current_cn_ptr]['num']
                 if predicted_cn_num < last_picked_cn:
-                    predicted_cn_num = last_picked_cn
+                     predicted_cn_num = last_picked_cn
             
             # Search window
             if current_cn_ptr >= len(self.cn_chapters) - 1:
                 mapping[str(eng_num)] = self.cn_chapters[-1]['num']
                 continue
 
-            # Larger window because the ratio might vary locally
-            start_search = max(0, current_cn_ptr - 5)
-            window_size = 25 
-            end_search = min(len(self.cn_chapters), current_cn_ptr + window_size)
+            # Key fix: Allow looking back if prediction is significantly lower than current_ptr
+            # This helps recover if we previously drifted too high.
+            # But we still prefer forward continuity, so we don't go back too far unless score is great.
+            
+            # Start search from prediction or current, whichever is lower (with some buffer)
+            start_search = max(0, min(current_cn_ptr, predicted_cn_num - 5))
+            
+            window_size = 50 
+            end_search = min(len(self.cn_chapters), start_search + window_size)
             
             for idx in range(start_search, end_search):
                 cn = self.cn_chapters[idx]
                 cn_num = cn['num']
                 cn_text = cn['text']
                 
-                # 1. Sequence Score (Softened)
+                # 1. Sequence Score (Softened further)
                 dist = abs(cn_num - predicted_cn_num)
-                num_score = -dist * 40 # Less severe penalty to allow anchor matching
+                num_score = -dist * 10 # Much less severe penalty to allow anchor matching
                 
                 # 2. Anchor match
                 anchor_score = 0
                 for en_name, cn_name in unique_anchors.items():
                     if en_name in eng_text and cn_name in cn_text:
                         weight = 15
-                        if en_name in ["Wu Lan", "Liu Wenyan", "White Feng", "Lightning Source Blade"]:
-                            weight = 50
+                        if en_name in ["Friendly Su Yu"]:
+                            weight = 1000
+                        elif en_name in ["Wu Lan", "Liu Wenyan", "White Feng", "Lightning Source Blade", 
+                                     "Zhao Chuan", "Talisman King", "Marquis Lanshan", "Stable Army Marquis", "Great Zhou King"]:
+                            weight = 200
                         anchor_score += weight
                 
                 # 3. Continuity bonus
@@ -177,6 +213,8 @@ class NovelAligner:
                 if total_score > max_score:
                     max_score = total_score
                     best_cn_idx = idx
+                
+
 
             mapping[str(eng_num)] = self.cn_chapters[best_cn_idx]['num']
             current_cn_ptr = best_cn_idx
@@ -189,7 +227,7 @@ class NovelAligner:
         print(f"Saved mapping to {output_file}")
 
 if __name__ == "__main__":
-    ENG_DIR = "TXT_Notebook"
+    ENG_DIR = "output/tribulation"
     CN_DIR = "data/cn_raws"
     OUTPUT = "data/alignment_map.json"
     

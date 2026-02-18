@@ -117,86 +117,104 @@ CN_TO_ES_CONCEPTS: dict[str, str] = {
     "镇守": "guardián",
 }
 
-# -- EN title/rank -> ES translation rules (for en_names_to_es) ----------------
-_EN_TO_ES_TITLES: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\bKing\b"), "Rey"),
-    (re.compile(r"\bQueen\b"), "Reina"),
-    (re.compile(r"\bEmperor\b"), "Emperador"),
-    (re.compile(r"\bEmpress\b"), "Emperatriz"),
-    (re.compile(r"\bPseudo Emperor\b"), "Pseudo Emperador"),
-    (re.compile(r"\bMarquis\b"), "Marqués"),
-    (re.compile(r"\bMarquise\b"), "Marquesa"),
-    (re.compile(r"\bGeneral\b"), "General"),
-    (re.compile(r"\bPrince\b"), "Príncipe"),
-    (re.compile(r"\bPrincess\b"), "Princesa"),
-    (re.compile(r"\bDuke\b"), "Duque"),
-    (re.compile(r"\bLord\b"), "Señor"),
-    (re.compile(r"\bLady\b"), "Señora"),
-    (re.compile(r"\bSaint\b"), "Santo"),
-    (re.compile(r"\bElder\b"), "Anciano"),
-    (re.compile(r"\bMaster\b"), "Maestro"),
-    (re.compile(r"\bConsort\b"), "Consorte"),
-    (re.compile(r"\bGreat\b"), "Gran"),
-    (re.compile(r"\bHeavenly\b"), "Celestial"),
-    (re.compile(r"\bImmortal\b"), "Inmortal"),
-    (re.compile(r"\bDivine\b"), "Divino"),
-    (re.compile(r"\bMartial\b"), "Marcial"),
-    (re.compile(r"\bBattle\b"), "Batalla"),
-    (re.compile(r"\bHundred\b"), "Cien"),
-    (re.compile(r"\bCulture\b"), "Cultura"),
-    (re.compile(r"\bJade\b"), "Jade"),
-    (re.compile(r"\bSoldier\b"), "Soldado"),
-    (re.compile(r"\bTalisman\b"), "Talismán"),
-    (re.compile(r"\bShadow\b"), "Sombra"),
-    (re.compile(r"\bAbyss\b"), "Abismo"),
-    (re.compile(r"\bDragon\b"), "Dragón"),
-    (re.compile(r"\bPhoenix\b"), "Fénix"),
-    (re.compile(r"\bFate\b"), "Destino"),
-    (re.compile(r"\bNether\b"), "Inframundo"),
-    (re.compile(r"\bFallen\b"), "Caída"),
-    (re.compile(r"\bStar\b"), "Estrella"),
-    (re.compile(r"\bCloud\b"), "Nube"),
-    (re.compile(r"\bWater\b"), "Agua"),
-    (re.compile(r"\bFire\b"), "Fuego"),
-    (re.compile(r"\bOrigin\b"), "Origen"),
-    (re.compile(r"\bBlood\b"), "Sangre"),
-    (re.compile(r"\bCelestial\b"), "Celestial"),
-    (re.compile(r"\bMansion\b"), "Mansión"),
-    (re.compile(r"\bAcademy\b"), "Academia"),
-    (re.compile(r"\bCity\b"), "Ciudad"),
-    (re.compile(r"\bMountain\b"), "Montaña"),
-    (re.compile(r"\bRiver\b"), "Río"),
-    (re.compile(r"\bSea\b"), "Mar"),
-    (re.compile(r"\bRealm\b"), "Reino"),
-    (re.compile(r"\bDomain\b"), "Dominio"),
-    (re.compile(r"\bArmy\b"), "Ejército"),
-    (re.compile(r"\bOffice\b"), "Oficina"),
-    (re.compile(r"\bCenter\b"), "Centro"),
-    (re.compile(r"\bResearch\b"), "Investigación"),
-    (re.compile(r"\bBattlefield\b"), "Campo de Batalla"),
-    (re.compile(r"\bPeace\b"), "Paz"),
-    (re.compile(r"\bSouth\b"), "Sur"),
-    (re.compile(r"\bNorth\b"), "Norte"),
-    (re.compile(r"\bEast\b"), "Este"),
-    (re.compile(r"\bWest\b"), "Oeste"),
-    (re.compile(r"\bPrimordial\b"), "Primordial"),
-    (re.compile(r"\bGiant\b"), "Gigante"),
-    (re.compile(r"\bMystic\b"), "Místico"),
-    (re.compile(r"\bArmor\b"), "Armadura"),
-    (re.compile(r"\bHuman\b"), "Humano"),
-    (re.compile(r"\bApe\b"), "Simio"),
-    (re.compile(r"\bGolden Crow\b"), "Cuervo Dorado"),
-    (re.compile(r"\bSuppression\b"), "Supresión"),
-    (re.compile(r"\bOverseer\b"), "Supervisor"),
-    (re.compile(r"\bStable\b"), "Estable"),
-    (re.compile(r"\bSevering\b"), "Corta"),
-]
 
-# Known pinyin-only names that should stay as-is (no title translation needed).
-# These are common character names where every word is pinyin.
-_PINYIN_PATTERN = re.compile(
-    r"^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$"
-)
+# -- EN title/rank -> ES translation (LLM-based) -------------------------------
+
+_GLOSSARY_TRANSLATION_PROMPT = """\
+You are a professional literary translator for a xianxia novel.
+Translate the following English proper nouns (titles, names, organizations) into Spanish.
+
+RULES:
+1. **Structure consistency**: 
+   - "Great [Name] King" -> "Gran Rey [Name]" (e.g., Great Zhou King -> Gran Rey Zhou)
+   - "[Name] King" -> "Rey [Name]"
+   - "[Name] Marquis" -> "Marqués [Name]" or "Marqués de [Name]" (use "de" if it sounds more natural, e.g. "Abyss Marquis" -> "Marqués del Abismo")
+   - "Pseudo Emperor" -> "Pseudo Emperador"
+   - "Royal Consort" -> "Consorte Real"
+2. **Grammar**: Use natural Spanish phrasing. 
+   - "Stable Army Marquis" -> "Marqués del Ejército Estable" (NOT "Estable Ejército Marqués")
+   - "Heavenly Fate Marquis" -> "Marqués del Destino Celestial"
+3. **Pinyin**: Keep pure pinyin names unchanged (e.g., "Su Yu" -> "Su Yu").
+4. **General**: Return a JSON object mapping the English term to the Spanish translation.
+
+=== INPUT TERMS ===
+{terms}
+
+=== OUTPUT FORMAT ===
+Return ONLY valid JSON:
+{{
+  "English Term": "Spanish Translation",
+  ...
+}}
+"""
+
+async def translate_glossary_to_es(
+    cn_to_en: dict[str, str],
+    adapter,
+    logger: logging.Logger,
+) -> dict[str, str]:
+    """
+    Translate extracted English names/titles to Spanish using the LLM.
+    This avoids hardcoded rules and allows for context-aware translations.
+    """
+    if not cn_to_en:
+        return {}
+
+    # Filter terms that are likely proper nouns needing translation
+    # Pure pinyin usually doesn't need translation, but we let the LLM handle it just in case
+    # or filter purely pinyin to save tokens if needed. For now, we send everything 
+    # that isn't obviously simple.
+    
+    unique_en_terms = sorted(list(set(cn_to_en.values())))
+    
+    if not unique_en_terms:
+         return {}
+
+    # Batch terms if too many (simple chunking)
+    chunk_size = 50
+    en_to_es: dict[str, str] = {}
+    
+    for i in range(0, len(unique_en_terms), chunk_size):
+        chunk = unique_en_terms[i:i + chunk_size]
+        terms_str = "\n".join(f"- {term}" for term in chunk)
+        
+        prompt = _GLOSSARY_TRANSLATION_PROMPT.format(terms=terms_str)
+        
+        try:
+            raw_response = await adapter.translate_chunk(
+                "You are a translator helper. Return JSON.",
+                prompt,
+                temperature=0.0,
+            )
+            
+            # Clean JSON
+            text = raw_response.strip()
+            text = re.sub(r"^```json\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if match:
+                text = match.group(0)
+                
+            batch_mapping = json.loads(text)
+            if isinstance(batch_mapping, dict):
+                 en_to_es.update(batch_mapping)
+                 
+        except Exception as e:
+            logger.warning(f"  Error translating glossary chunk: {e}")
+            # Fallback: identity mapping for failed terms
+            for term in chunk:
+                if term not in en_to_es:
+                    en_to_es[term] = term
+
+    # Map back CN -> ES
+    cn_to_es: dict[str, str] = {}
+    for cn, en in cn_to_en.items():
+        es = en_to_es.get(en, en) # Default to English if no translation found
+        cn_to_es[cn] = es
+        
+    logger.info("  Traducidos %d términos EN->ES (via LLM).", len(en_to_es))
+    return cn_to_es
+
 
 
 # -- Helpers -------------------------------------------------------------------
@@ -413,55 +431,6 @@ async def extract_name_glossary(
     return glossary
 
 
-# -- EN names -> ES conversion ------------------------------------------------
-
-def _is_pure_pinyin(name: str) -> bool:
-    """Check if a name is purely pinyin (all capitalized words, no English titles)."""
-    # Known English words that appear in titles -- if any word matches, it's not pure pinyin
-    _TITLE_WORDS = {
-        "king", "queen", "emperor", "empress", "marquis", "marquise", "general",
-        "prince", "princess", "duke", "lord", "lady", "saint", "elder", "master",
-        "consort", "great", "heavenly", "immortal", "divine", "martial", "battle",
-        "hundred", "culture", "jade", "soldier", "talisman", "shadow", "abyss",
-        "dragon", "phoenix", "fate", "nether", "fallen", "star", "cloud", "water",
-        "fire", "origin", "blood", "celestial", "mansion", "academy", "city",
-        "mountain", "river", "sea", "realm", "domain", "army", "office", "center",
-        "research", "battlefield", "peace", "south", "north", "east", "west",
-        "primordial", "giant", "mystic", "armor", "human", "ape", "golden", "crow",
-        "suppression", "overseer", "stable", "severing", "pseudo", "old", "fat",
-        "grand", "dream", "spirit", "monster", "heaven", "hole", "range", "floating",
-        "sacred", "ancient", "four", "brave", "clan",
-    }
-    words = name.split()
-    if not words:
-        return False
-    return all(w.lower() not in _TITLE_WORDS for w in words)
-
-
-def en_names_to_es(cn_to_en: dict[str, str]) -> dict[str, str]:
-    """
-    Convert extracted CN->EN name mappings to CN->ES.
-
-    Rules:
-    - Pure pinyin names stay as-is (Su Yu, Liu Wenyan)
-    - Descriptive titles/ranks get their English components translated to Spanish
-      using the rule-based _EN_TO_ES_TITLES patterns
-    """
-    cn_to_es: dict[str, str] = {}
-
-    for cn, en in cn_to_en.items():
-        if _is_pure_pinyin(en):
-            cn_to_es[cn] = en
-        else:
-            # Apply title translation rules
-            es = en
-            for pattern, replacement in _EN_TO_ES_TITLES:
-                es = pattern.sub(replacement, es)
-            cn_to_es[cn] = es
-
-    return cn_to_es
-
-
 # -- Glossary building --------------------------------------------------------
 
 def build_merged_glossary(
@@ -619,8 +588,13 @@ async def translate_chapter(
         logger=logger,
     )
 
-    # 3. Convert EN names -> ES (rule-based)
-    extracted_cn_to_es = en_names_to_es(extracted_cn_to_en)
+    # 3. Convert EN names -> ES (LLM-based)
+    # extracted_cn_to_es = en_names_to_es(extracted_cn_to_en) # OLD
+    extracted_cn_to_es = await translate_glossary_to_es(
+        extracted_cn_to_en,
+        adapter,
+        logger
+    )
 
     # 4. Merge: extracted names + hardcoded concepts
     merged_glossary = build_merged_glossary(extracted_cn_to_es)
