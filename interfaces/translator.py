@@ -2,12 +2,13 @@ import asyncio
 import logging
 import time
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from core.domain import ChapterContent, Glossary, TranslationResult
 from core.text_processor import TextProcessor
+from utils.logger import LOGGER_NAME
 
-logger = logging.getLogger("scraper-novela")
+logger = logging.getLogger(LOGGER_NAME)
 
 
 class TranslatorAdapter(ABC):
@@ -101,7 +102,7 @@ class TranslationPipeline:
 
         # Translate title
         title_src = self.tp.prepare_text(chapter.title)
-        logger.info("Traduciendo título...")
+        logger.info("Translating title...")
         title_raw = await self.adapter.translate_chunk(
             system_prompt,
             self.pb.build_user_message(title_src),
@@ -129,13 +130,13 @@ class TranslationPipeline:
             )
 
         logger.info(
-            "Traduciendo %d chunks (max %d concurrent)...",
+            "Translating %d chunks (max %d concurrent)...",
             len(chunks),
             self.max_concurrent,
         )
         semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        async def _do_chunk(idx: int, chunk: List[str]) -> tuple[int, List[str]]:
+        async def _do_chunk(idx: int, chunk: List[str]) -> Tuple[int, List[str]]:
             text = "\n\n".join(chunk)
             text_src = self.tp.prepare_text(text)
             tc0 = time.time()
@@ -152,7 +153,7 @@ class TranslationPipeline:
             out = self.tp.finalize_text(out)
             out_pars = [p.strip() for p in out.split("\n\n") if p.strip()]
             logger.info(
-                "  Chunk %d/%d completado en %.1fs",
+                "  Chunk %d/%d done in %.1fs",
                 idx + 1,
                 len(chunks),
                 time.time() - tc0,
@@ -169,7 +170,7 @@ class TranslationPipeline:
 
         total = time.time() - t0
         logger.info(
-            "Cap %d traducido en %.1fs (%.1f min)",
+            "Chapter %d translated in %.1fs (%.1f min)",
             chapter.number,
             total,
             total / 60,

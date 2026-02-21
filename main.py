@@ -48,13 +48,13 @@ def cmd_scrape(args: argparse.Namespace, settings: dict) -> int:
     end = args.end
 
     if end == 0:
-        logger.info("Descubriendo total de capítulos...")
+        logger.info("Discovering total chapter count...")
         total = scraper.extract_total_chapters()
         if total is None:
-            logger.error("No se pudo determinar el total. Usa --end.")
+            logger.error("Could not determine total. Use --end.")
             return 2
         end = total
-        logger.info("Total descubierto: %d", total)
+        logger.info("Total discovered: %d", total)
 
     scraper.scrape_range(output_dir, start, end, resume=args.resume)
     return 0
@@ -130,7 +130,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
         logger.error("Rango inválido: start=%d end=%d", start, end)
         return 2
 
-    logger.info("Traduciendo capítulos %d..%d con %s", start, end, adapter_name)
+    logger.info("Translating chapters %d..%d with %s", start, end, adapter_name)
 
     async def run_all():
         for n in range(start, end + 1):
@@ -140,7 +140,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
             out_path = out_dir / es_name
 
             if args.resume and out_path.exists():
-                logger.info("[skip] %d ya traducido", n)
+                logger.info("[skip] %d already translated", n)
                 continue
             if not in_path.exists():
                 logger.warning("[miss] %d no existe (%s)", n, en_name)

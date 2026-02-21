@@ -1,5 +1,6 @@
 # Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 *.pyo
@@ -10,11 +11,42 @@ __pycache__/
 
 # OS
 .DS_Store
+Thumbs.db
 
-# Project specific
+# Project specific — output and caches
 output/
 logs/
+traduccion/
+traduccion_*/
+data/cn_raws/
+data/es_translations/
+data/name_glossary_cache/
+data/master_names.json
+data/en_to_es_extra.json
+
+# Legacy and archive
+_legacy/
+Archive.zip
+TXT_Notebook/
 traduccion copy/
 traduccion copy 2/
 traduccion_ollama_test/
-TXT_Notebook/
+
+# Backup and log files
+*.bak
+*.log
+qa_output.txt
+
+# Internal notes
+docs/estado_actual*.md
+
+# Auto-generated data
+data/glossary.json
+
+# Reader app output
+reader-app/public/chapters/
+reader-app/dist/
+reader-app/node_modules/
+
+# Duplicate/temp scripts
+scripts/generate_pdfs\ copy.py

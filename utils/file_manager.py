@@ -1,8 +1,13 @@
 import json
+import logging
 import os
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+from utils.logger import LOGGER_NAME
+
+logger = logging.getLogger(LOGGER_NAME)
 
 
 def read_utf8(path: Path) -> str:
@@ -34,8 +39,8 @@ def load_jsonl(path: Path) -> List[dict]:
                 continue
             try:
                 items.append(json.loads(line))
-            except Exception:
-                pass
+            except json.JSONDecodeError as exc:
+                logger.debug("Skipping malformed JSONL line in %s: %s", path.name, exc)
     return items
 
 
@@ -56,8 +61,8 @@ def load_env_file(path: Optional[Path]) -> None:
             v = v.strip().strip('"').strip("'")
             if k:
                 os.environ[k] = v
-    except Exception:
-        pass
+    except OSError as exc:
+        logger.debug("Could not read env file %s: %s", path, exc)
 
 
 def discover_chapter_files(

@@ -31,10 +31,30 @@ from pathlib import Path
 
 import yaml
 
+# polish module is in the same directory
+from polish import regex_cleanup_chapter, polish_chapter, clean_title, fix_glossary_terms
+
 # -- Root discovery ------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(SCRIPT_DIR))
+
+# -- Master name glossary (from build_master_glossary.py) ----------------------
+MASTER_NAMES_PATH = ROOT / "data" / "master_names.json"
+
+def _load_master_names() -> dict[str, str]:
+    """Load master_names.json as CN→ES dict. Returns empty dict if missing."""
+    if not MASTER_NAMES_PATH.exists():
+        return {}
+    try:
+        with MASTER_NAMES_PATH.open("r", encoding="utf-8") as f:
+            raw = json.load(f)
+        return {cn: data["es"] for cn, data in raw.items() if "es" in data}
+    except (json.JSONDecodeError, OSError, KeyError):
+        return {}
+
+MASTER_CN_TO_ES: dict[str, str] = _load_master_names()
 
 # -- Hardcoded CN->ES glossary (universal concepts only) -----------------------
 # These are terms that are consistent across ALL chapters and need specific
@@ -113,8 +133,13 @@ CN_TO_ES_CONCEPTS: dict[str, str] = {
     "议员令": "orden de asambleísta",
     "战兵": "arma de guerra",
     "时间长河": "Río del Tiempo",
+    "基道": "Dao fundamental",
+    "本道": "pen dao",
     "归墟之地": "Tierra del Retorno",
     "镇守": "guardián",
+    "规则": "reglas",
+    "惩罚": "castigo",
+    "劫": "tribulación",
 }
 
 
@@ -160,12 +185,16 @@ async def translate_glossary_to_es(
     if not cn_to_en:
         return {}
 
-    # Filter terms that are likely proper nouns needing translation
-    # Pure pinyin usually doesn't need translation, but we let the LLM handle it just in case
-    # or filter purely pinyin to save tokens if needed. For now, we send everything 
-    # that isn't obviously simple.
-    
-    unique_en_terms = sorted(list(set(cn_to_en.values())))
+    # Skip CN terms already in master glossary (no need to re-translate)
+    cn_to_en_filtered = {
+        cn: en for cn, en in cn_to_en.items()
+        if cn not in MASTER_CN_TO_ES
+    }
+    if not cn_to_en_filtered:
+        logger.info("  All names already in master glossary, skipping LLM.")
+        return {cn: MASTER_CN_TO_ES[cn] for cn in cn_to_en if cn in MASTER_CN_TO_ES}
+
+    unique_en_terms = sorted(list(set(cn_to_en_filtered.values())))
     
     if not unique_en_terms:
          return {}
@@ -206,13 +235,17 @@ async def translate_glossary_to_es(
                 if term not in en_to_es:
                     en_to_es[term] = term
 
-    # Map back CN -> ES
+    # Map back CN -> ES (master glossary terms + LLM-translated terms)
     cn_to_es: dict[str, str] = {}
     for cn, en in cn_to_en.items():
-        es = en_to_es.get(en, en) # Default to English if no translation found
-        cn_to_es[cn] = es
-        
-    logger.info("  Traducidos %d términos EN->ES (via LLM).", len(en_to_es))
+        if cn in MASTER_CN_TO_ES:
+            cn_to_es[cn] = MASTER_CN_TO_ES[cn]
+        else:
+            cn_to_es[cn] = en_to_es.get(en, en)
+
+    master_count = sum(1 for cn in cn_to_en if cn in MASTER_CN_TO_ES)
+    logger.info("  Translated %d terms (%d master, %d LLM).",
+                len(cn_to_es), master_count, len(cn_to_es) - master_count)
     return cn_to_es
 
 
@@ -372,13 +405,13 @@ async def extract_name_glossary(
             with cache_path.open("r", encoding="utf-8") as f:
                 cached = json.load(f)
             if isinstance(cached, dict):
-                logger.info("  Glosario de nombres cargado de cache: %s", cache_path.name)
+                logger.info("  Name glossary loaded from cache: %s", cache_path.name)
                 return cached
         except (json.JSONDecodeError, OSError):
             pass  # Re-extract if cache is corrupted
 
     if not en_texts:
-        logger.info("  Sin referencia EN -- sin extracción de nombres.")
+        logger.info("  No EN reference — skipping name extraction.")
         return {}
 
     en_combined = "\n\n---\n\n".join(en_texts)
@@ -396,7 +429,7 @@ async def extract_name_glossary(
             temperature=0.0,
         )
     except Exception as e:
-        logger.warning("  Error en extracción de nombres: %s", e)
+        logger.warning("  Name extraction error: %s", e)
         return {}
 
     # Parse JSON defensively (LLM may wrap in ```json ... ```)
@@ -412,11 +445,11 @@ async def extract_name_glossary(
     try:
         glossary = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("  No se pudo parsear JSON de extracción: %.100s...", text)
+        logger.warning("  Could not parse extraction JSON: %.100s...", text)
         return {}
 
     if not isinstance(glossary, dict):
-        logger.warning("  Respuesta de extracción no es un dict.")
+        logger.warning("  Extraction response is not a dict.")
         return {}
 
     # Filter out non-string values
@@ -427,7 +460,7 @@ async def extract_name_glossary(
     with cache_path.open("w", encoding="utf-8") as f:
         json.dump(glossary, f, ensure_ascii=False, indent=2)
 
-    logger.info("  Extraídos %d nombres CN->EN (guardados en cache).", len(glossary))
+    logger.info("  Extracted %d CN->EN names (saved to cache).", len(glossary))
     return glossary
 
 
@@ -437,14 +470,16 @@ def build_merged_glossary(
     extracted_cn_to_es: dict[str, str],
 ) -> dict[str, str]:
     """
-    Merge extracted per-chapter names with the hardcoded concept glossary.
-    Hardcoded concepts take priority (they are manually curated).
+    Merge glossaries with priority: master > hardcoded concepts > extracted.
+    Master glossary (from build_master_glossary.py) is the single source of truth.
     """
     result: dict[str, str] = {}
-    # Start with extracted names (lower priority)
+    # Start with extracted names (lowest priority)
     result.update(extracted_cn_to_es)
-    # Overlay with hardcoded concepts (higher priority)
+    # Overlay with hardcoded concepts (medium priority)
     result.update(CN_TO_ES_CONCEPTS)
+    # Overlay with master glossary (highest priority — cross-chapter verified)
+    result.update(MASTER_CN_TO_ES)
     return result
 
 
@@ -465,6 +500,7 @@ def build_system_prompt(cn_to_es: dict[str, str]) -> str:
         "- 规则之主 = \"Maestro de las Leyes\" (NUNCA \"señor de las reglas\")\n"
         "- 镇守 = \"guardian\" (NUNCA \"protector\" o \"vigilante\")\n"
         "- 人主 = \"señor humano\" (NUNCA \"señor de los humanos\")\n"
+        "- 本道 = \"pen dao\" (NUNCA \"dao principal\", \"mi dao\" ni variantes)\n"
         "Si un término chino aparece en el glosario, USA ESA traduccion sin "
         "excepcion.\n\n"
         "=== REGLAS DE TRADUCCION ===\n"
@@ -475,23 +511,54 @@ def build_system_prompt(cn_to_es: dict[str, str]) -> str:
         "REESTRUCTURA las frases en oraciones completas y fluidas, como haria "
         "un novelista profesional hispanohablante. Combina fragmentos en "
         "oraciones compuestas con conjunciones y subordinadas.\n"
-        "3. DIALOGOS: Los dialogos deben sonar naturales en español. No traduzcas "
+        "3. Tono y Caracterización:\n"
+        "   - Para personajes INTELECTUALES/ERUDITOS (ej. Wan Tiansheng): Usa un tono "
+        "CLÍNICO, ANALÍTICO y SOFISTICADO. Evita el dramatismo emocional. Su voz "
+        "debe sonar como la de un arquitecto de sistemas o un filósofo deconstruyendo "
+        "la realidad. Prefieren la precisión técnica a la metáfora florida.\n"
+        "   - 'Dao' y Cultivo: Trata estos temas como 'deuda técnica', 'acumulación "
+        "de datos' o 'procesos de optimización'. Usa vocabulario elevado: 'acumulación', "
+        "'fundamentos', 'exploración', 'pionerismo'.\n"
+        "4. MODISMOS E IDIOMAS:\n"
+        "   - NUNCA traduzcas modismos literalmente si suenan extraños (ej. NO 'entrar en tus ojos').\n"
+        "   - ADAPTA el sentido a un registro culto. Ej: '¿He entrado en tus ojos?' -> "
+        "'¿Soy digno de su atención?' o '¿Estoy ascendiendo a tu salón?'.\n"
+        "5. DIALOGOS: Los dialogos deben sonar naturales en español. No traduzcas "
         "palabra por palabra. Adapta expresiones y muletillas chinas a "
         "equivalentes naturales en español. Ejemplo:\n"
         "  MAL: \"de repente extrañado dijo: Te conozco?\"\n"
         "  BIEN: \"pregunto con asombro: Te conozco?\"\n"
         "  MAL: \"durante mucho tiempo, dudo y dijo\"\n"
         "  BIEN: \"Tras un largo silencio, respondio con vacilacion\"\n"
-        "4. Conserva el tono narrativo, la tension dramatica y los matices "
+        "6. Conserva el tono narrativo, la tension dramatica y los matices "
         "emocionales del original.\n"
-        "5. Preserva los saltos de parrafo exactamente como en el original.\n"
-        "6. NO agregues notas, aclaraciones ni comentarios que no estén en el "
+        "7. Preserva los saltos de parrafo exactamente como en el original.\n"
+        "8. NO agregues notas, aclaraciones ni comentarios que no estén en el "
         "original.\n"
-        "7. Usa español neutro: evita 'vosotros', 'vale', 'coger'.\n"
-        "8. Omite lineas que sean notas del autor (求订阅, 求月票, PS:, etc.).\n"
-        "9. NOMBRES: pinyin se mantiene (Su Yu, Tiangu). Titulos y rangos se "
-        "traducen al español segun el glosario.\n\n"
+        "9. Usa español neutro: evita 'vosotros', 'vale', 'coger'.\n"
+        "10. Omite lineas que sean notas del autor (求订阅, 求月票, PS:, etc.).\n"
+        "11. NOMBRES: pinyin se mantiene (Su Yu, Tiangu). Titulos y rangos se "
+        "traducen al español segun el glosario.\n"
+        "12. NUNCA dejes texto en chino sin traducir, incluyendo onomatopeyas "
+        "(噗嗤→resopló, 嗤→chasqueó, 嘭→¡Bam!, 哼→¡Hmph!, 呵呵→je je, "
+        "嘶→siseó, 咔嚓→¡Crack!) y adverbios/adjetivos (幽幽→con voz etérea, "
+        "淡淡→con calma, 缓缓→lentamente). Si no conoces la onomatopeya, "
+        "tradúcela por su efecto sonoro en español.\n"
+        "13. VARIA los verbos de dialogo: NO uses 'dijo con voz grave' ni "
+        "'dijo con voz profunda' mas de 2 veces por capitulo. Alterna con: "
+        "respondio, declaro, sentencio, murmuro, exclamo, replico, pronuncio, "
+        "intervino, señalo, etc.\n"
+        "14. EVITA muletillas repetitivas: 'En ese momento' maximo 2 veces "
+        "por capitulo. Usa: 'Justo entonces', 'En aquel instante', 'Al punto', "
+        "'En ese preciso momento', etc.\n"
+        "15. PRIORIDAD LÓGICA: Ante la ambigüedad, prioriza la coherencia del sistema de poder. "
+        "No lo traduzcas como tecnología moderna, sino como una filosofía con reglas estrictas. "
+        "La 'magia' tiene leyes, pero siguen siendo leyes de un mundo fantástico, "
+        "no de un centro de datos.\n\n"
         "=== EJEMPLO DE CALIDAD ===\n"
+        "ORIGINAL (Wan Tiansheng): \"Was I able to enter your eyes?\"\n"
+        "TRADUCCION (Estilo Arquitecto): \"Se puede decir que ahora eres un emperador. "
+        "¿Estoy ascendiendo a tu salón?\" (Nótese el tono retórico y elevado).\n\n"
         "NARRACION MAL (calco del chino):\n"
         "\"Solo 6 fuerzas de la union del Dao, y todavia se esconden a muerte. "
         "6, si fuera antes, Su Yu exclamaria. Ahora... Hoy mate a 6! "
@@ -509,7 +576,23 @@ def build_system_prompt(cn_to_es: dict[str, str]) -> str:
         "campamento del Marques Ejercito Estable.\"\n\n"
         "Observa: se eliminan exclamaciones innecesarias, se reestructuran "
         "fragmentos telegraficos, y se usan los términos del glosario (Daofuse, "
-        "no 'union del Dao')."
+        "no 'union del Dao').\n\n"
+        "ONOMATOPEYAS MAL:\n"
+        "\"噗嗤 Su Yu se rio.\"\n\n"
+        "ONOMATOPEYAS BIEN:\n"
+        "\"Su Yu resopló una carcajada.\"\n\n"
+        "CALCO DE CADENCIA MAL:\n"
+        "\"Abrió los ojos. Miró a su alrededor. Se levantó. Caminó hacia "
+        "la puerta. La abrió.\"\n\n"
+        "CADENCIA BIEN:\n"
+        "\"Abrió los ojos y, tras observar a su alrededor, se levantó y "
+        "caminó hasta la puerta para abrirla.\"\n\n"
+        "PARRAFO-CALCO MAL:\n"
+        "\"Sin palabras.\"\n"
+        "(como párrafo independiente)\n\n"
+        "PARRAFO-CALCO BIEN:\n"
+        "\"Se quedó sin palabras.\"\n"
+        "(integrado como oración completa)"
     )
 
     # -- CN->ES glossary (merged: auto-extracted names + hardcoded concepts) --
@@ -562,15 +645,56 @@ async def translate_chapter(
     max_concurrent: int,
     temperature: float,
     logger: logging.Logger,
+    *,
+    do_polish: bool = True,
+    polish_only: bool = False,
+    force: bool = False,
 ) -> None:
     out_path = output_dir / f"cn_{cn_num:04d}_es.txt"
-    if out_path.exists():
-        logger.info("Cap CN-%04d ya traducido -- omitiendo.", cn_num)
+
+    # Forbidden terms to inject into the polish prompt
+    _forbidden = {
+        "fusión del Dao": "Daofuse",
+        "unión del Dao": "Daofuse",
+        "Dao fusionado": "Daofuse",
+        "se Daofuse": "alcanzó el Daofuse",
+        "Lord": "Señor",
+        "Rumble": "¡Retumbó!",
+        "señor de las reglas": "Maestro de las Leyes",
+        "Rey del Cielo": "Rey Celestial",
+    }
+
+    # --polish-only: re-polish an already-translated file
+    if polish_only:
+        if not out_path.exists():
+            logger.warning("Chapter CN-%04d has no existing translation — skipping polish-only.", cn_num)
+            return
+        existing = out_path.read_text(encoding="utf-8")
+        parts = existing.split("\n\n")
+        title_es = parts[0] if parts else ""
+        title_es = clean_title(title_es)
+        translated = [p.strip() for p in parts[1:] if p.strip()]
+        # Apply regex cleanup (pre-LLM)
+        translated = regex_cleanup_chapter(translated)
+        # Apply LLM polish
+        if do_polish:
+            translated = await polish_chapter(
+                translated, adapter, logger, forbidden_terms=_forbidden,
+            )
+            # Final regex pass to catch anything the LLM reintroduced
+            translated = regex_cleanup_chapter(translated)
+        lines = [title_es, ""] + translated
+        out_path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
+        logger.info("  Re-pulido: %s", out_path.relative_to(ROOT))
+        return
+
+    if out_path.exists() and not force:
+        logger.info("Chapter CN-%04d already translated — skipping (use --force to re-translate).", cn_num)
         return
 
     title_cn, paragraphs = parse_cn_chapter(cn_path)
     if not paragraphs:
-        logger.warning("Cap CN-%04d vacio -- omitiendo.", cn_num)
+        logger.warning("Chapter CN-%04d is empty — skipping.", cn_num)
         return
 
     # 1. Load aligned EN chapters (full text, no truncation)
@@ -596,18 +720,19 @@ async def translate_chapter(
         logger
     )
 
-    # 4. Merge: extracted names + hardcoded concepts
+    # 4. Merge: extracted names + hardcoded concepts + master glossary
     merged_glossary = build_merged_glossary(extracted_cn_to_es)
 
     # 5. Build system prompt with merged glossary (no raw EN blob)
     system_prompt = build_system_prompt(merged_glossary)
 
     logger.info(
-        "Cap CN-%04d: %d parrafos, %d nombres extraidos, EN=%s",
+        "Chapter CN-%04d: %d paragraphs, %d names extracted, %d master, EN=%s",
         cn_num,
         len(paragraphs),
         len(extracted_cn_to_en),
-        en_nums[0] if en_nums else "ninguna",
+        len(MASTER_CN_TO_ES),
+        en_nums[0] if en_nums else "none",
     )
 
     # Translate title
@@ -625,7 +750,7 @@ async def translate_chapter(
 
     # Chunk body and translate concurrently
     chunks = chunk_paragraphs(paragraphs, chunk_chars)
-    logger.info("  %d chunks para traducir...", len(chunks))
+    logger.info("  %d chunks to translate...", len(chunks))
 
     semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -638,7 +763,7 @@ async def translate_chapter(
                 temperature=temperature,
             )
         out_pars = [p.strip() for p in raw.split("\n\n") if p.strip()]
-        logger.info("  Chunk %d/%d completado.", idx + 1, len(chunks))
+        logger.info("  Chunk %d/%d done.", idx + 1, len(chunks))
         return idx, out_pars
 
     results = await asyncio.gather(*[do_chunk(i, c) for i, c in enumerate(chunks)])
@@ -648,22 +773,30 @@ async def translate_chapter(
     for _, pars in results:
         translated.extend(pars)
 
+    # Post-processing: regex cleanup (pre-LLM)
+    translated = regex_cleanup_chapter(translated)
+
+    # Post-processing: LLM polish (optional)
+    if do_polish:
+        translated = await polish_chapter(
+            translated, adapter, logger, forbidden_terms=_forbidden,
+        )
+        # Final regex pass to catch anything the LLM reintroduced
+        translated = regex_cleanup_chapter(translated)
+
     # Write output
     output_dir.mkdir(parents=True, exist_ok=True)
     lines = [title_es, ""] + translated
     out_path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
-    logger.info("  Guardado: %s", out_path.relative_to(ROOT))
+    logger.info("  Saved: %s", out_path.relative_to(ROOT))
 
 
 # -- CLI -----------------------------------------------------------------------
 
 async def main_async(args: argparse.Namespace) -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    logger = logging.getLogger("translate_cn")
+    from utils.logger import setup_logger, LOGGER_NAME
+    setup_logger(verbose=True)
+    logger = logging.getLogger(LOGGER_NAME)
 
     # Load .env (same convention as main.py)
     from utils.file_manager import load_env_file
@@ -681,7 +814,7 @@ async def main_async(args: argparse.Namespace) -> None:
     adapter_name = args.adapter or adapter_cfg.get("active", "gemini")
     from adapters import get_adapter
     adapter = get_adapter(adapter_name, adapter_cfg)
-    logger.info("Adaptador: %s  modelo: %s", adapter_name, adapter.model_name)
+    logger.info("Adapter: %s  model: %s", adapter_name, adapter.model_name)
 
     # Collect CN chapters in range
     def cn_num(p: Path) -> int:
@@ -698,11 +831,11 @@ async def main_async(args: argparse.Namespace) -> None:
     )
 
     if not cn_chapters:
-        logger.error("No se encontraron capitulos CN en %d-%d.", args.start, args.end)
+        logger.error("No CN chapters found in range %d-%d.", args.start, args.end)
         return
 
     logger.info(
-        "Traduciendo %d capitulos CN (%d-%d) -> %s",
+        "Translating %d CN chapters (%d-%d) -> %s",
         len(cn_chapters),
         cn_chapters[0][0],
         cn_chapters[-1][0],
@@ -726,9 +859,12 @@ async def main_async(args: argparse.Namespace) -> None:
             max_concurrent=max_concurrent,
             temperature=temperature,
             logger=logger,
+            do_polish=args.polish,
+            polish_only=args.polish_only,
+            force=args.force,
         )
 
-    logger.info("Traduccion CN->ES completada.")
+    logger.info("CN->ES translation complete.")
 
 
 def main() -> None:
@@ -755,6 +891,22 @@ def main() -> None:
     parser.add_argument(
         "--chunk-chars", type=int, default=None,
         help="Tamano maximo de cada chunk en caracteres chinos (por defecto: 2500)"
+    )
+    parser.add_argument(
+        "--polish", action="store_true", default=True,
+        help="Activar pulido LLM post-traduccion (default: activado)"
+    )
+    parser.add_argument(
+        "--no-polish", dest="polish", action="store_false",
+        help="Desactivar pulido LLM (solo aplica limpieza regex)"
+    )
+    parser.add_argument(
+        "--polish-only", action="store_true", default=False,
+        help="Solo re-pulir traducciones existentes sin re-traducir"
+    )
+    parser.add_argument(
+        "--force", action="store_true", default=False,
+        help="Re-traducir capitulos aunque ya exista traduccion"
     )
     args = parser.parse_args()
     asyncio.run(main_async(args))

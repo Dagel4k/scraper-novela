@@ -15,8 +15,9 @@ import requests
 from bs4 import BeautifulSoup, NavigableString, Tag
 
 from utils.file_manager import append_jsonl
+from utils.logger import LOGGER_NAME
 
-logger = logging.getLogger("scraper-novela")
+logger = logging.getLogger(LOGGER_NAME)
 
 
 class LightNovelPubScraper:
@@ -270,19 +271,19 @@ class LightNovelPubScraper:
         *,
         resume: bool = False,
     ) -> None:
-        logger.info("Descargando capítulos %d..%d → %s", start, end, output_dir)
+        logger.info("Downloading chapters %d..%d → %s", start, end, output_dir)
         for n in range(start, end + 1):
             fname = f"{str(n).zfill(4)}_en.txt"
             dest = output_dir / fname
             if resume and dest.exists():
-                logger.info("[skip] %d ya existe", n)
+                logger.info("[skip] %d already exists", n)
                 continue
             try:
                 title, paragraphs = self.scrape_chapter(n)
                 body_len = len("\n\n".join(paragraphs))
                 if body_len < self.min_length:
                     logger.warning(
-                        "Cap %d: contenido corto (%d chars)", n, body_len
+                        "Chapter %d: short content (%d chars)", n, body_len
                     )
                 url = self.chapter_url_template.format(n=n)
                 saved = self.save_chapter(output_dir, n, title, paragraphs, url)
@@ -292,4 +293,4 @@ class LightNovelPubScraper:
             except Exception as e:
                 logger.error("[err] %d: %s", n, e)
             time.sleep(max(0.0, self.delay))
-        logger.info("Scraping completado.")
+        logger.info("Scraping complete.")

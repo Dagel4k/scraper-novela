@@ -1,22 +1,107 @@
 [
   {
+    "number": 683,
+    "title": "Reino del Destino",
+    "file": "cn_0700_es.txt"
+  },
+  {
+    "number": 684,
+    "title": "¡Gran tesoro!",
+    "file": "cn_0701_es.txt"
+  },
+  {
+    "number": 685,
+    "title": "Atacando el Reino del Destino, Tiangu sonríe",
+    "file": "cn_0702_es.txt"
+  },
+  {
+    "number": 686,
+    "title": "La caída de tres Hou",
+    "file": "cn_0703_es.txt"
+  },
+  {
+    "number": 687,
+    "title": "Matar hasta el final",
+    "file": "cn_0704_es.txt"
+  },
+  {
+    "number": 688,
+    "title": "El único soberano de Myriad Realms",
+    "file": "cn_0705_es.txt"
+  },
+  {
     "number": 689,
     "title": "El afable Su Yu (solo habrá una actualización hoy)",
     "file": "cn_0706_es.txt"
   },
   {
     "number": 690,
-    "title": "Tierra del Retorno",
+    "title": "Origin Land",
     "file": "cn_0707_es.txt"
   },
   {
     "number": 691,
-    "title": "Aparición del Hijo del Cielo",
+    "title": "La aparición del Hijo del Destino",
     "file": "cn_0708_es.txt"
   },
   {
     "number": 692,
-    "title": "Pacificación del Fénix World",
+    "title": "Pacificación del Phoenix Realm",
     "file": "cn_0709_es.txt"
+  },
+  {
+    "number": 693,
+    "title": "Pacificación de los Cuatro Reinos",
+    "file": "cn_0710_es.txt"
+  },
+  {
+    "number": 694,
+    "title": "La llegada de Nuevo Yu",
+    "file": "cn_0711_es.txt"
+  },
+  {
+    "number": 695,
+    "title": "La cadena de desprecio de los eruditos",
+    "file": "cn_0712_es.txt"
+  },
+  {
+    "number": 696,
+    "title": "La aparición simultánea de cuatro daos",
+    "file": "cn_0713_es.txt"
+  },
+  {
+    "number": 697,
+    "title": "¡Inaugurando un Dao asombroso!",
+    "file": "cn_0714_es.txt"
+  },
+  {
+    "number": 698,
+    "title": "¡El Dao de los Seres Vivos se abre!",
+    "file": "cn_0715_es.txt"
+  },
+  {
+    "number": 699,
+    "title": "Los eruditos progresan rápido",
+    "file": "cn_0716_es.txt"
+  },
+  {
+    "number": 700,
+    "title": "Deseo de ir al Upper Realm",
+    "file": "cn_0717_es.txt"
+  },
+  {
+    "number": 701,
+    "title": "Entrando al Upper Realm",
+    "file": "cn_0718_es.txt"
+  },
+  {
+    "number": 702,
+    "title": "Marqués Dingjun",
+    "file": "cn_0719_es.txt"
+  },
+  {
+    "number": 703,
+    "title": "Perfil bajo, menos matanzas",
+    "file": "cn_0720_es.txt"
   }
 ]

@@ -4,7 +4,8 @@ import shutil
 import re
 
 # Paths
-project_root = os.getcwd()
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
 source_dir = os.path.join(project_root, 'traduccion_cn')
 target_app_dir = os.path.join(project_root, 'reader-app')
 public_dir = os.path.join(target_app_dir, 'public')
@@ -12,19 +13,40 @@ chapters_dir = os.path.join(public_dir, 'chapters')
 metadata_file = os.path.join(public_dir, 'chapters.json')
 
 def extract_chapter_info(file_path):
-    """Extracts chapter number and title from the first line of the file."""
+    """Extracts chapter number and title from the file content or filename."""
+    number = None
+    title = None
+    
+    # 1. Try to find in content (first 10 lines)
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            first_line = f.readline().strip()
-            # Match formats like "Capítulo 689: El afable Su Yu"
-            match = re.search(r'Capítulo\s+(\d+):?\s*(.*)', first_line)
-            if match:
-                number = int(match.group(1))
-                title = match.group(2).strip()
-                return number, title if title else f"Capítulo {number}"
+            for _ in range(10):
+                line = f.readline()
+                if not line: break
+                line = line.strip()
+                # Match "Capítulo 123: Title" or "Capítulo 123 Title" or just "Capítulo 123"
+                match = re.search(r'Cap[ií]tulo\s+(\d+)(?::|\s+)?\s*(.*)', line, re.IGNORECASE)
+                if match:
+                    number = int(match.group(1))
+                    found_title = match.group(2).strip()
+                    if found_title:
+                        title = found_title
+                    break
     except Exception as e:
         print(f"Error reading {file_path}: {e}")
-    return None, None
+
+    # 2. If not found in content, try filename
+    if number is None:
+        filename = os.path.basename(file_path)
+        match = re.search(r'(?:^|cn_)(\d+)(?:_es)?', filename)
+        if match:
+            number = int(match.group(1))
+    
+    # 3. Construct title if missing
+    if number is not None and not title:
+        title = f"Capítulo {number}"
+        
+    return number, title
 
 def prepare_data():
     if not os.path.exists(chapters_dir):

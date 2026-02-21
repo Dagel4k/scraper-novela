@@ -1,9 +1,11 @@
 import logging
 import sys
 
+LOGGER_NAME = "scraper-novela"
+
 
 def setup_logger(
-    name: str = "scraper-novela",
+    name: str = LOGGER_NAME,
     *,
     verbose: bool = False,
     debug: bool = False,

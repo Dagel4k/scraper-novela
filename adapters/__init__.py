@@ -22,5 +22,5 @@ def get_adapter(name: str, config: dict) -> TranslatorAdapter:
         return OpenAIAdapter(model=model, api_key=api_key)
 
     raise ValueError(
-        f"Adapter desconocido: '{name}'. Disponibles: gemini, openai"
+        f"Unknown adapter: '{name}'. Available: gemini, openai"
     )

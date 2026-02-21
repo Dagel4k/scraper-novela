@@ -1,157 +1,213 @@
-Scraper de la novela "Tribulation of Myriad Races" (LightNovelPub)
+# novela-scraper-translator
 
-Objetivo: Extraer todos los capítulos (inglés) desde LightNovelPub y guardarlos localmente, uno por archivo, con título, número y cuerpo limpio (sin UI ni comentarios). La traducción a español es una fase posterior y separada.
+[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![LLM](https://img.shields.io/badge/LLM-Gemini%20%7C%20OpenAI%20%7C%20Ollama-orange)](.env.example)
 
-Ejecución rápida
+A complete pipeline to **scrape**, **translate** (EN→ES and CN→ES), and **export** web novels as EPUB/PDF, with a built-in web reader for QA.
 
-- Requisitos: Python 3.9+, `requests`, `beautifulsoup4`, opcional `lxml` y opcional `cloudscraper`.
-- Instala dependencias: `pip install -r requirements.txt`
-- Ejecuta: `python -m scraper.scrape_lightnovelpub --output-dir output/tribulation --discover-total`
+Built for *Tribulation of Myriad Races* but designed to be adapted to any LightNovelPub title.
 
-Características
+---
 
-- Navegación por patrón numérico de capítulos: `/chapter/<N>/`.
-- Descubrimiento del total de capítulos desde la página base (patrón "<n> Chapters").
-- Heurísticas robustas para extraer:
-  - Título oficial del capítulo (del `h1` que contiene "Chapter").
-  - Cuerpo narrativo (párrafos entre el título y cualquier bloque de UI/menú/ads/comentarios).
-- Guardado por capítulo en archivos `NNNN_en.txt` y registro `index.jsonl` con metadatos.
-- Reintentos con backoff, UA configurable, espera entre peticiones, reanudación por omisión (omite archivos existentes).
+## Features
 
-Traducción a español (EN -> ES)
+- **Scraper** — Downloads chapters from LightNovelPub with retry logic, configurable delays, and optional Cloudflare bypass
+- **Multi-LLM translation** — Pluggable adapters for Google Gemini, OpenAI, and Ollama (local)
+- **Hybrid pipeline** — Stage 1: fast local draft with Ollama → Stage 2: cloud refinement with GPT
+- **Chinese→Spanish direct** — Dedicated CN→ES pipeline with English chapter alignment for name consistency
+- **Glossary system** — Protects names and terms across chapters using placeholder tokens; auto-extracts new terms per chapter
+- **Post-processing / polishing** — Regex cleanup of leaked CJK characters, repetitive phrases, and a second LLM pass for natural Spanish
+- **EPUB & PDF export** — Block-based export with cover art, custom fonts, and configurable chapter grouping
+- **Web reader** — Vite/Vanilla JS app for reading and QA-ing translated chapters in the browser
 
-Hay tres scripts disponibles:
+---
 
-1. **Pipeline híbrido (recomendado)**: `python -m scraper.translate_hybrid`
-   - Stage 1: Ollama (local) traduce inglés → español (borrador)
-   - Stage 2: GPT (OpenAI) refina el texto español (no traduce inglés)
-   - Combina velocidad local con calidad GPT
-   - Uso: `python -m scraper.translate_hybrid --input-dir output/tribulation --start 1 --end 100`
+## Project Structure
 
-2. **Solo OpenAI**: `python -m scraper.translate_to_es`
-   - Proveedor: OpenAI (requiere `openai` y `OPENAI_API_KEY`)
-   - Traducción directa inglés → español
+```
+├── main.py                    # Unified CLI (scrape, translate, export)
+├── scraper/                   # LightNovelPub scraper
+├── core/                      # Domain models and text processing
+├── adapters/                  # LLM adapters (Gemini, OpenAI)
+├── interfaces/                # Abstract translator interface and prompt builder
+├── utils/                     # Logger and file manager
+├── scripts/                   # Specialized pipelines
+│   ├── translate_cn.py        # Chinese→Spanish pipeline
+│   ├── aligner.py             # Align CN chapters to EN for name extraction
+│   ├── glossary_extractor.py  # Auto-generate glossary from chapters
+│   ├── polish.py              # Post-processing and LLM polishing
+│   ├── generate_epubs.py      # EPUB export
+│   └── generate_pdfs.py       # PDF export
+├── config/
+│   ├── settings.yaml          # All settings (scraper, translation, adapters, prompts)
+│   ├── translation_glossary.json  # Term and name glossary
+│   └── ingest_glossary.json   # Post-processing replacements
+├── data/
+│   └── alignment_map.json     # CN↔EN chapter alignment map
+├── docs/                      # Architecture and pipeline documentation
+└── reader-app/                # Vite web reader for QA
+```
 
-3. **Solo Ollama**: `python -m scraper.translate_to_es_ollama`
-   - Proveedor: Ollama (local, sin API key)
-   - Traducción directa inglés → español
-- Configura tu API key como variable de entorno (no la guardes en archivos) para OpenAI:
-  - macOS/Linux: `export OPENAI_API_KEY=sk-...`
-  - Windows (PowerShell): `$Env:OPENAI_API_KEY="sk-..."`
-- Uso típico:
-  - Traducir todo el rango detectado: `python -m scraper.translate_to_es --input-dir output/tribulation`
-  - Traducir un rango: `python -m scraper.translate_to_es --input-dir output/tribulation --start 1 --end 100`
-  - Reanudar (omite ya traducidos): `python -m scraper.translate_to_es --input-dir output/tribulation --resume`
-  - Ajustar modelo (OpenAI): `python -m scraper.translate_to_es --model gpt-4o-mini`
-  - Ajustar tamaño de chunk: `--chunk-chars 7000` (divide por párrafos para respetar formato)
-  - Activar glosario automático: `python -m scraper.translate_to_es --input-dir output/tribulation --auto-glossary --persist-glossary`
-  - Cambiar carpeta de salida: `--output-dir traduccion` (por defecto usa la misma que `--input-dir`)
+---
 
-Pipeline híbrido (Ollama + GPT)
+## Setup
 
-- **Recomendado para traducciones largas**: combina velocidad local (Ollama) con calidad GPT
-- Requisitos:
-  - Ollama instalado y corriendo (`ollama serve`)
-  - Modelo Ollama descargado: `ollama pull qwen2.5:7b` (modelo por defecto, optimizado para M4)
-  - `OPENAI_API_KEY` configurada para Stage 2
-- Uso básico:
-  ```bash
-  python -m scraper.translate_hybrid \
-    --input-dir output/tribulation \
-    --start 1 --end 100 \
-    --ollama-model qwen2.5:7b \
-    --gpt-model gpt-4o-mini \
-    --resume
-  ```
-  Los archivos traducidos se guardan en `traduccion/` por defecto (usa `--output-dir` para cambiarlo).
-- Opciones útiles:
-  - `--skip-stage1`: Omitir Stage 1 (usar borradores existentes `*_draft_es.txt`)
-  - `--skip-stage2`: Solo ejecutar Stage 1 (generar borradores)
-  - `--ollama-temp 0.2`: Temperature para Ollama (Stage 1)
-  - `--gpt-temp 0.3`: Temperature para GPT (Stage 2)
-  - `--chunk-chars 5000`: Tamaño de chunks (default: 5000 para M4)
-  - `--max-concurrent 2`: Chunks procesados en paralelo dentro de cada capítulo (default: 2 para M4)
-  - `--max-concurrent-chapters 1`: Capítulos procesados en paralelo (default: 1 para evitar saturar Ollama)
-- Flujo típico:
-  1. Stage 1 genera borradores rápidos con Ollama (Qwen2.5 7B)
-  2. Stage 2 refina los borradores con GPT (solo texto español)
-  3. Salida final: `NNNN_es.txt` con traducción refinada
-- Optimizado para MacBook Air M4:
-  - Modelo por defecto: `qwen2.5:7b` (mejor balance calidad/velocidad)
-  - Chunks más pequeños (5000 chars) y menor concurrencia (2) para evitar sobrecarga
+**Requirements:** Python 3.9+
 
-Uso con Ollama (local, solo Stage 1)
+```bash
+git clone https://github.com/Dagel4k/scraper-novela.git
+cd scraper-novela
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
 
-- Instala Ollama en macOS:
-  - Con Homebrew: `brew install ollama`
-  - O script oficial: `curl https://ollama.ai/install.sh | sh`
-- Arranca el servicio: `ollama serve`
-- Descarga un modelo ligero (ejemplos):
-  - `ollama pull llama3.2:3b` (≈2–4 GB quantizado)
-  - `ollama pull mistral:7b`
-- Ejecuta el traductor usando Ollama:
-  - `python -m scraper.translate_to_es --provider ollama --model llama3.2:3b --input-dir output/tribulation --resume`
-  - O con el script dedicado: `python -m scraper.translate_to_es_ollama --input-dir output/tribulation --resume`
-  - Si cambias el puerto/host: `--ollama-url http://localhost:11434`
-- Notas:
-  - No requiere `OPENAI_API_KEY` (solo para Ollama puro).
-  - Para equipos con 16 GB RAM, prioriza modelos 3B–7B en versión quantizada (Q4/Q5).
+Copy the environment template and add your API keys:
 
-Salida de traducción
+```bash
+cp .env.example .env
+# Edit .env with your GEMINI_API_KEY and/or OPENAI_API_KEY
+```
 
-- Archivos por capítulo: `NNNN_es.txt` en el mismo directorio de salida.
-- Índice: `index_es.jsonl` con `title_en`, `title_es`, `file_en`, `file_es`, `model` y longitudes.
-- El script preserva nombres propios y lugares, y traduce poderes/niveles/técnicas.
-- Personaliza reglas con `config/translation_glossary.json`:
-  - `never_translate`: términos a mantener tal cual (nombres, topónimos, organizaciones).
-  - `translations`: glosario forzado (p.ej., "Source Opening" => "Apertura de Origen").
-  - Reglas de pre/post-proceso: placeholders para proteger nombres y reemplazos regex.
+---
 
-Glosario automático (descubrimiento en marcha)
+## Usage
 
-- `--auto-glossary`: antes de traducir cada capítulo, el script pide al modelo extraer:
-  - `never_translate`: nombres de PERSONAS y LUGARES (base: "Nanyuan", "Great Xia").
-  - `translations`: términos de poderes/niveles/técnicas con su traducción.
-- `--persist-glossary`: guarda los términos detectados en `config/translation_glossary.json` tras cada capítulo.
-- El traductor respeta el glosario y usa placeholders para asegurar que los nombres no se traduzcan; en compuestos traduce el descriptor y mantiene el nombre ("Nanyuan City" => "Ciudad de Nanyuan").
+### 1 — Scrape chapters
 
-Notas de seguridad
+```bash
+# Auto-discover total and download all chapters
+python main.py scrape --output-dir output/tribulation
 
-- No pegues tu API key en archivos; usa `OPENAI_API_KEY` en el entorno (solo si usas OpenAI).
-- Este repo no envía tu clave a ningún sitio; el script sólo la lee del entorno al ejecutar.
+# Resume an interrupted download
+python main.py scrape --output-dir output/tribulation --resume
 
-Estructura del repo
+# Fixed range
+python main.py scrape --start 1 --end 100 --output-dir output/tribulation
+```
 
-- `scraper/scrape_lightnovelpub.py`: Script principal y CLI.
-- `requirements.txt`: Dependencias.
-- `docs/arquitectura.md`: Flujo de scraping.
-- `docs/estructura_pagina.md`: Detalle de páginas y heurísticas.
-- `docs/formato_salida.md`: Especificación de salida local.
+### 2 — Translate (EN → ES)
 
-Uso recomendado
+```bash
+# Translate with Gemini (default)
+python main.py translate --input-dir output/tribulation --output-dir traduccion
 
-- Descubre el total y descarga todo:
-  - `python -m scraper.scrape_lightnovelpub --output-dir output/tribulation --discover-total`
-- O fija rango manual:
-  - `python -m scraper.scrape_lightnovelpub --start 1 --end 100 --output-dir output/tribulation`
-- Reanudar (omitirá existentes):
-  - `python -m scraper.scrape_lightnovelpub --discover-total --resume --output-dir output/tribulation`
+# Resume from where you left off
+python main.py translate --input-dir output/tribulation --output-dir traduccion --resume
 
-Notas
+# Use OpenAI instead
+python main.py translate --adapter openai --input-dir output/tribulation --output-dir traduccion
 
-- Si el sitio aplica protección (Cloudflare), el script intentará usar `cloudscraper` si está instalado. Si no, puedes instalarlo (`pip install cloudscraper`) o incrementar los delays.
-- Respeta el sitio: usa `--delay 2` o mayor y no satures con concurrencia (no está activada por defecto).
+# Specific range
+python main.py translate --start 1 --end 50 --input-dir output/tribulation --output-dir traduccion
+```
 
+### 3 — Translate (CN → ES)
 
-python -m scraper.translate_to_es --input-dir output/tribulation --start 227 --end 300 --output-dir traduccion --auto-glossary
-        --persist-glossary --verbose --env-file .env --api-timeout 120 --chunk-chars 3500 --resume
+Direct Chinese-to-Spanish pipeline with automatic name extraction from the English version:
 
+```bash
+# Translate chapters 705–720 from Chinese raws
+python scripts/translate_cn.py --start 705 --end 720
 
+# Without LLM polishing (faster, regex cleanup only)
+python scripts/translate_cn.py --start 705 --end 720 --no-polish
 
-        Ran
-  └ .venv/bin/python scripts/generate_pdfs.py --input traduccion --output output/pdfs --block-size 50 --basename novela --cover 'config/
-        cover.jpg' --tnr-dir '/System/Library/Fonts/Supplemental' --ingest-glossary 'config/ingest_glossary.json' | sed -n '1,160p'
+# Re-polish existing translations without re-translating
+python scripts/translate_cn.py --start 705 --end 720 --polish-only
+```
 
-.venv/bin/python scripts/generate_epubs.py --input traduccion --output output/epub --range 301-330 --basename novela
-        --cover config/cover.jpg
-        (.venv) daniel@MacBook-Air-de-Daniel scraper novela % .venv/bin/python scripts/generate_epubs.py --input traduccion --output output/epub --range 389-416 --basename novela --cover config/cover.jpg
+### 4 — Export EPUB / PDF
+
+```bash
+# EPUB — chapters 301–350 in one file
+python scripts/generate_epubs.py \
+  --input traduccion --output output/epub \
+  --range 301-350 --basename novela --cover config/cover.jpg
+
+# PDF — auto-split into blocks of 50 chapters
+python scripts/generate_pdfs.py \
+  --input traduccion --output output/pdfs \
+  --block-size 50 --basename novela --cover config/cover.jpg
+```
+
+### 5 — Web reader
+
+```bash
+cd reader-app
+npm install
+npm run sync   # sync translated chapters from ../traduccion_cn
+npm run dev    # open at http://localhost:5173
+```
+
+---
+
+## Configuration
+
+Everything is driven by `config/settings.yaml`. Key sections:
+
+| Section | What it controls |
+|---|---|
+| `novel` | Source URL and chapter URL template |
+| `scraper` | Delays, retries, selector heuristics |
+| `translation` | Chunk size, concurrency, temperature |
+| `adapter` | Active LLM and model names |
+| `prompts` | System and user prompt templates |
+| `output` | Default directories, PDF/EPUB formatting |
+
+The glossary at `config/translation_glossary.json` controls:
+- `never_translate` — names and places kept as-is
+- `translations` — forced term mappings (e.g. `"Source Opening"` → `"Apertura de Origen"`)
+
+---
+
+## Hybrid Pipeline (Ollama + GPT)
+
+For long translations, combine local speed with cloud quality:
+
+```bash
+# Requires: ollama serve + ollama pull qwen2.5:7b
+python -m scraper.translate_hybrid \
+  --input-dir output/tribulation \
+  --start 1 --end 100 \
+  --ollama-model qwen2.5:7b \
+  --gpt-model gpt-4o-mini \
+  --resume
+```
+
+Stage 1 (Ollama) generates fast drafts; Stage 2 (GPT) refines Spanish without re-translating from English.
+
+---
+
+## Architecture
+
+```
+Scraper → index.jsonl + NNNN_en.txt
+           │
+           ▼
+Translation Pipeline
+  ├─ TextProcessor   (glossary placeholders, chunking)
+  ├─ PromptBuilder   (system + user prompts from settings.yaml)
+  ├─ LLM Adapter     (Gemini / OpenAI / Ollama)
+  └─ Output          NNNN_es.txt + index_es.jsonl
+           │
+           ▼
+Export (EPUB / PDF) or Web Reader
+```
+
+See [`docs/arquitectura.md`](docs/arquitectura.md) for full pipeline details.
+
+---
+
+## Security
+
+- Never commit your `.env` file — it's in `.gitignore`
+- Copy `.env.example` → `.env` and fill in your keys
+- The code reads API keys exclusively from environment variables
+
+---
+
+## License
+
+[MIT](LICENSE)

@@ -65,15 +65,14 @@ ES_TO_EN_SEGMENT: Dict[str, str] = {
     "GRAN_ZHOU": "GREAT_ZHOU",
 }
 
+_JACCARD_THRESHOLD = 0.66
+
 
 def _strip_accents(s: str) -> str:
-    try:
-        return "".join(
-            c for c in unicodedata.normalize("NFD", s)
-            if unicodedata.category(c) != "Mn"
-        )
-    except Exception:
-        return s
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s)
+        if unicodedata.category(c) != "Mn"
+    )
 
 
 def _es_to_en_slug(slug: str) -> str:
@@ -88,6 +87,60 @@ def _es_to_en_slug(slug: str) -> str:
         )
         mapped.append(ES_TO_EN_SEGMENT.get(key, key))
     return "_".join(mapped)
+
+
+def _lookup_placeholder(
+    name: str,
+    restore_tokens: Dict[str, str],
+    key_sets: List[Tuple[str, str, set]],
+) -> Optional[str]:
+    """Resolve a variant/malformed placeholder name to its original term.
+
+    Tries three strategies in order:
+    1. Exact key match on slugified variants.
+    2. Key prefix match.
+    3. Fuzzy Jaccard similarity on segment sets.
+
+    Returns None if no match is found above the threshold.
+    """
+    raw = slugify(_strip_accents(name))
+    approx = _es_to_en_slug(raw)
+    base = re.sub(r"_\d+\b", "", raw)
+
+    candidates = [f"<PROTECT_{raw}>"]
+    if approx != raw:
+        candidates.append(f"<PROTECT_{approx}>")
+    if base and base != raw:
+        candidates.append(f"<PROTECT_{base}>")
+
+    # Exact match
+    for key in candidates:
+        if key in restore_tokens:
+            return restore_tokens[key]
+
+    # Prefix match
+    for key in restore_tokens:
+        for pref in candidates:
+            if key.startswith(pref.rstrip(">")):
+                return restore_tokens[key]
+
+    # Fuzzy Jaccard
+    for candidate in filter(None, [raw, approx, base]):
+        slug = re.sub(r"_\d+\b", "", candidate)
+        segs = {s for s in slug.split("_") if s}
+        best: Optional[Tuple[str, str]] = None
+        best_score = 0.0
+        for k, term, ksegs in key_sets:
+            inter = len(segs & ksegs)
+            denom = max(len(segs), len(ksegs)) or 1
+            score = inter / denom
+            if score > best_score:
+                best_score = score
+                best = (k, term)
+        if best and best_score >= _JACCARD_THRESHOLD:
+            return best[1]
+
+    return None
 
 
 class TextProcessor:
@@ -143,43 +196,10 @@ class TextProcessor:
         )
 
         def _repl_angle(m: re.Match) -> str:
-            tok = m.group(0)
-            name = m.group("name") or ""
-            raw = slugify(_strip_accents(name))
-            candidates = [f"<PROTECT_{raw}>"]
-            approx = _es_to_en_slug(raw)
-            if approx != raw:
-                candidates.append(f"<PROTECT_{approx}>")
-            base = re.sub(r"_\d+\b", "", raw)
-            if base and base != raw:
-                candidates.append(f"<PROTECT_{base}>")
-            # exact key match
-            for key in candidates:
-                if key in glossary.restore_tokens:
-                    return glossary.restore_tokens[key]
-            # prefix match
-            for key in glossary.restore_tokens:
-                for pref in candidates:
-                    if key.startswith(pref.rstrip(">")):
-                        return glossary.restore_tokens[key]
-            # fuzzy Jaccard by segments
-            for candidate in [raw, approx, base]:
-                if not candidate:
-                    continue
-                base_slug = re.sub(r"_\d+\b", "", candidate)
-                segs = {s for s in base_slug.split("_") if s}
-                best = None
-                best_score = 0.0
-                for k, term, ksegs in key_sets:
-                    inter = len(segs & ksegs)
-                    denom = max(len(segs), len(ksegs)) or 1
-                    score = inter / denom
-                    if score > best_score:
-                        best_score = score
-                        best = (k, term)
-                if best and best_score >= 0.66:
-                    return best[1]
-            return tok
+            result = _lookup_placeholder(
+                m.group("name") or "", glossary.restore_tokens, key_sets
+            )
+            return result if result is not None else m.group(0)
 
         text = angle_pat.sub(_repl_angle, text)
 
@@ -190,40 +210,10 @@ class TextProcessor:
         )
 
         def _repl_bare(m: re.Match) -> str:
-            tok = m.group(0)
-            name = m.group("name") or ""
-            raw = slugify(_strip_accents(name))
-            candidates = [f"<PROTECT_{raw}>"]
-            approx = _es_to_en_slug(raw)
-            if approx != raw:
-                candidates.append(f"<PROTECT_{approx}>")
-            base = re.sub(r"_\d+\b", "", raw)
-            if base and base != raw:
-                candidates.append(f"<PROTECT_{base}>")
-            for key in candidates:
-                if key in glossary.restore_tokens:
-                    return glossary.restore_tokens[key]
-            for key in glossary.restore_tokens:
-                for pref in candidates:
-                    if key.startswith(pref.rstrip(">")):
-                        return glossary.restore_tokens[key]
-            for candidate in [raw, approx, base]:
-                if not candidate:
-                    continue
-                base_slug = re.sub(r"_\d+\b", "", candidate)
-                segs = {s for s in base_slug.split("_") if s}
-                best = None
-                best_score = 0.0
-                for k, term, ksegs in key_sets:
-                    inter = len(segs & ksegs)
-                    denom = max(len(segs), len(ksegs)) or 1
-                    score = inter / denom
-                    if score > best_score:
-                        best_score = score
-                        best = (k, term)
-                if best and best_score >= 0.66:
-                    return best[1]
-            return tok
+            result = _lookup_placeholder(
+                m.group("name") or "", glossary.restore_tokens, key_sets
+            )
+            return result if result is not None else m.group(0)
 
         text = bare_pat.sub(_repl_bare, text)
 
