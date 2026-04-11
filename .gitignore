@@ -44,7 +44,7 @@ docs/estado_actual*.md
 data/glossary.json
 
 # Reader app output
-reader-app/public/chapters/
+# reader-app/public/chapters/
 reader-app/dist/
 reader-app/node_modules/
 

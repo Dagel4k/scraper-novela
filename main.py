@@ -98,7 +98,8 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
 
     # Build pipeline components
     tp = TextProcessor(glossary, ingest_glossary)
-    pb = PromptBuilder(settings, glossary)
+    source_lang = getattr(args, "source_lang", "en")
+    pb = PromptBuilder(settings, glossary, source_lang=source_lang)
     pipeline = TranslationPipeline(
         adapter, tp, pb,
         chunk_chars=chunk_chars,
@@ -118,8 +119,13 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
 
     idx = load_jsonl(in_dir / "index.jsonl")
     if not idx:
-        files = sorted(in_dir.glob("*_en.txt"))
-        numbers = [int(p.stem.split("_")[0]) for p in files if p.stem.split("_")[0].isdigit()]
+        search_pattern = "cn_*.txt" if source_lang == "cn" else "*_en.txt"
+        files = sorted(in_dir.glob(search_pattern))
+        numbers = []
+        for p in files:
+            m = re.search(r"(\d+)", p.stem)
+            if m:
+                numbers.append(int(m.group(1)))
         end_auto = max(numbers) if numbers else 0
     else:
         end_auto = max(item.get("number", 0) for item in idx)
@@ -134,9 +140,14 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
 
     async def run_all():
         for n in range(start, end + 1):
-            en_name = f"{str(n).zfill(4)}_en.txt"
-            es_name = f"{str(n).zfill(4)}_es.txt"
-            in_path = in_dir / en_name
+            if source_lang == "cn":
+                src_name = f"cn_{str(n).zfill(4)}.txt"
+                es_name = f"cn_{str(n).zfill(4)}_es.txt"
+            else:
+                src_name = f"{str(n).zfill(4)}_en.txt"
+                es_name = f"{str(n).zfill(4)}_es.txt"
+                
+            in_path = in_dir / src_name
             out_path = out_dir / es_name
 
             if args.resume and out_path.exists():
@@ -158,7 +169,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
                     number=n,
                     title_en=result.title_en,
                     title_es=result.title_es,
-                    file_en=en_name,
+                    file_en=src_name,
                     file_es=es_name,
                     input_dir=str(in_dir),
                     output_dir=str(out_dir),
@@ -364,6 +375,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ruta a settings.yaml (default: config/settings.yaml)",
     )
 
+    parser.add_argument(
+        "--source-lang", default="en", choices=["en", "cn"],
+        help="Idioma de origen: en o cn (default: en)",
+    )
     subs = parser.add_subparsers(dest="command", required=True)
 
     # ── scrape ──────────────────────────────────────────────────

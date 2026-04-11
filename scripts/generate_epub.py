@@ -20,7 +20,7 @@ h1 { text-align: center; }
 p { text-indent: 1em; margin-bottom: 0.5em; }
 """
 
-def create_epub(input_dir, output_file, title="Novel", author="Unknown"):
+def create_epub(input_dir, output_file, title="Novel", author="Unknown", start_chap=None, end_chap=None):
     # Find chapters
     files = []
     for f in os.listdir(input_dir):
@@ -28,7 +28,12 @@ def create_epub(input_dir, output_file, title="Novel", author="Unknown"):
             # Try to extract chapter number
             m = re.search(r"(?:^|cn_)(\d+)(?:_es)?", f)
             if m:
-                files.append((int(m.group(1)), os.path.join(input_dir, f)))
+                chap_num = int(m.group(1))
+                if start_chap is not None and chap_num < start_chap:
+                    continue
+                if end_chap is not None and chap_num > end_chap:
+                    continue
+                files.append((chap_num, os.path.join(input_dir, f)))
     
     files.sort(key=lambda x: x[0])
     
@@ -176,13 +181,15 @@ def main():
     parser.add_argument("--output", required=True, help="Output file")
     parser.add_argument("--title", default="Novel", help="Title of the novel")
     parser.add_argument("--author", default="Unknown", help="Author of the novel")
+    parser.add_argument("--start", type=int, help="Start chapter number")
+    parser.add_argument("--end", type=int, help="End chapter number")
     
     args = parser.parse_args()
     
     if not os.path.exists(os.path.dirname(args.output)):
         os.makedirs(os.path.dirname(args.output))
         
-    create_epub(args.input, args.output, args.title, args.author)
+    create_epub(args.input, args.output, args.title, args.author, args.start, args.end)
 
 if __name__ == "__main__":
     main()

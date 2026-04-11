@@ -73,7 +73,7 @@ def discover_chapter_files(
     for p in directory.glob("*.txt"):
         if not p.is_file():
             continue
-        m = re.match(r"^(\d+)", p.name)
+        m = re.match(r"^(?:cn_)?(\d+)", p.name)
         if not m:
             continue
         num = int(m.group(1))

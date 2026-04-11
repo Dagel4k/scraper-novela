@@ -21,6 +21,10 @@ def get_adapter(name: str, config: dict) -> TranslatorAdapter:
         model = openai_cfg.get("model", "gpt-4o-mini")
         return OpenAIAdapter(model=model, api_key=api_key)
 
+    if name == "minimax":
+        from adapters.minimax_adapter import MinimaxAdapter
+        return MinimaxAdapter()
+
     raise ValueError(
-        f"Unknown adapter: '{name}'. Available: gemini, openai"
+        f"Unknown adapter: '{name}'. Available: gemini, openai, minimax"
     )

@@ -32,15 +32,17 @@ class TranslatorAdapter(ABC):
 
 
 class PromptBuilder:
-    def __init__(self, settings: dict, glossary: Glossary) -> None:
+    def __init__(self, settings: dict, glossary: Glossary, source_lang: str = "en") -> None:
         self._settings = settings
         self._glossary = glossary
+        self._source_lang = source_lang
 
     def build_system_prompt(self, title_en: str) -> str:
         prompt_cfg = self._settings.get("prompt", {})
         parts: List[str] = []
 
-        preamble = prompt_cfg.get("preamble", "")
+        preamble_key = "preamble_cn" if self._source_lang == "cn" else "preamble"
+        preamble = prompt_cfg.get(preamble_key, prompt_cfg.get("preamble", ""))
         if preamble:
             parts.append(preamble.strip())
 
@@ -62,6 +64,8 @@ class PromptBuilder:
             parts.append("Glosario de traducciones forzadas: " + pairs)
 
         parts.append(f"\nTítulo del capítulo (referencia): {title_en}")
+        if self._source_lang == "cn":
+            parts.append("Nota: El texto de entrada está en CHINO. Tradúcelo directamente al ESPAÑOL.")
         return "\n".join(parts)
 
     def build_user_message(self, text: str) -> str:
