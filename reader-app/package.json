@@ -7,7 +7,7 @@
   "scripts": {
     "sync": "python3 ../scripts/prepare_reader_data.py",
     "dev": "npm run sync && vite",
-    "build": "npm run sync && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
