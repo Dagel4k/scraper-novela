@@ -1,6 +1,7 @@
 {
   "name": "reader-app",
   "private": true,
+  "description": "Novel Reader - Auto-update trigger",
   "version": "0.0.0",
   "type": "module",
   "scripts": {
