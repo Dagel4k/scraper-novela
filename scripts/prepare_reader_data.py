@@ -59,7 +59,7 @@ def prepare_data():
     chapters_metadata = []
     
     print(f"Reading files from {source_dir}...")
-    files = [f for f in os.listdir(source_dir) if f.endswith('.txt')]
+    files = [f for f in os.listdir(source_dir) if f.endswith('.txt') and f.startswith('cn_')]
     
     for filename in files:
         src_file = os.path.join(source_dir, filename)
