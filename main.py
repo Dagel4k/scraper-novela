@@ -85,6 +85,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
     max_concurrent = args.max_concurrent or trans_cfg.get("max_concurrent", 3)
     temperature = args.temperature if args.temperature is not None else trans_cfg.get("temperature", 0.2)
     timeout = args.api_timeout or trans_cfg.get("timeout", 120)
+    request_delay = trans_cfg.get("request_delay", 0)
 
     # Adapter
     adapter_cfg = settings.get("adapter", {})
@@ -104,6 +105,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
         adapter, tp, pb,
         chunk_chars=chunk_chars,
         max_concurrent=max_concurrent,
+        request_delay=request_delay,
         temperature=temperature,
         timeout=timeout,
     )
@@ -154,7 +156,7 @@ def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
                 logger.info("[skip] %d already translated", n)
                 continue
             if not in_path.exists():
-                logger.warning("[miss] %d no existe (%s)", n, en_name)
+                logger.warning("[miss] %d no existe (%s)", n, src_name)
                 continue
 
             try:

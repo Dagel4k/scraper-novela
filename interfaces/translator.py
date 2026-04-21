@@ -84,9 +84,9 @@ class TranslationPipeline:
         adapter: TranslatorAdapter,
         text_processor: TextProcessor,
         prompt_builder: PromptBuilder,
-        *,
         chunk_chars: int = 7000,
         max_concurrent: int = 3,
+        request_delay: float = 0,
         temperature: float = 0.2,
         timeout: float = 120.0,
     ) -> None:
@@ -95,6 +95,7 @@ class TranslationPipeline:
         self.pb = prompt_builder
         self.chunk_chars = chunk_chars
         self.max_concurrent = max_concurrent
+        self.request_delay = request_delay
         self.temperature = temperature
         self.timeout = timeout
 
@@ -114,6 +115,11 @@ class TranslationPipeline:
             timeout=self.timeout,
         )
         title_es = self.tp.finalize_text(title_raw)
+        
+        # Pause after title translation before starting chunks
+        if self.request_delay > 0:
+            logger.debug("Waiting %.1fs (rate-limit delay after title)...", self.request_delay)
+            await asyncio.sleep(self.request_delay)
 
         # Chunk and translate paragraphs
         chunks = TextProcessor.chunk_paragraphs(
@@ -134,43 +140,42 @@ class TranslationPipeline:
             )
 
         logger.info(
-            "Translating %d chunks (max %d concurrent)...",
+            "Translating %d chunks sequentially...",
             len(chunks),
-            self.max_concurrent,
         )
-        semaphore = asyncio.Semaphore(self.max_concurrent)
 
-        async def _do_chunk(idx: int, chunk: List[str]) -> Tuple[int, List[str]]:
+        translated_paragraphs: List[str] = []
+
+        for idx, chunk in enumerate(chunks):
             text = "\n\n".join(chunk)
             text_src = self.tp.prepare_text(text)
             tc0 = time.time()
             logger.info(
                 "  Chunk %d/%d (%d chars)...", idx + 1, len(chunks), len(text)
             )
-            async with semaphore:
-                out = await self.adapter.translate_chunk(
-                    system_prompt,
-                    self.pb.build_user_message(text_src),
-                    temperature=self.temperature,
-                    timeout=self.timeout,
-                )
+            
+            out = await self.adapter.translate_chunk(
+                system_prompt,
+                self.pb.build_user_message(text_src),
+                temperature=self.temperature,
+                timeout=self.timeout,
+            )
+            
             out = self.tp.finalize_text(out)
             out_pars = [p.strip() for p in out.split("\n\n") if p.strip()]
+            translated_paragraphs.extend(out_pars)
+            
             logger.info(
                 "  Chunk %d/%d done in %.1fs",
                 idx + 1,
                 len(chunks),
                 time.time() - tc0,
             )
-            return idx, out_pars
-
-        tasks = [_do_chunk(i, c) for i, c in enumerate(chunks)]
-        results = await asyncio.gather(*tasks)
-        results_sorted = sorted(results, key=lambda x: x[0])
-
-        translated_paragraphs: List[str] = []
-        for _, pars in results_sorted:
-            translated_paragraphs.extend(pars)
+            
+            # Pause between chunks if delay is set
+            if self.request_delay > 0 and idx < len(chunks) - 1:
+                logger.debug("Waiting %.1fs (rate-limit delay)...", self.request_delay)
+                await asyncio.sleep(self.request_delay)
 
         total = time.time() - t0
         logger.info(

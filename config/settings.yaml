@@ -45,7 +45,8 @@ scraper:
 # ── Translation ─────────────────────────────────────────────────
 translation:
   chunk_chars: 7000
-  max_concurrent: 3
+  max_concurrent: 1
+  request_delay: 5.0
   temperature: 0.2
   timeout: 120
   retries: 3
@@ -60,8 +61,8 @@ glossary:
 adapter:
   active: "gemini"
   gemini:
-    model: "gemini-2.0-flash"
-    api_key_env: "GEMINI_API_KEY"
+    model: "gemini-2.5-flash-lite"
+    api_key_env: "GEMINI_API_FREE"
   openai:
     model: "gpt-4o-mini"
     api_key_env: "OPENAI_API_KEY"
@@ -94,8 +95,8 @@ prompt:
     - >-
       No traduzcas nombres propios de PERSONAS, LUGARES específicos, ni términos
       únicos sin traducción natural. Pero SÍ traduce nombres de reinos, países,
-      sectas, clanes u organizaciones cuando su traducción literal al español sea
-      semánticamente correcta.
+      sectas, clanes u organizaciones cuando su traducción literal al español
+      sea semánticamente correcta.
     - >-
       Traduce términos de poderes, habilidades, niveles de cultivo, técnicas,
       estados, armas genéricas y conceptos del sistema, respetando las
@@ -112,7 +113,11 @@ prompt:
       dentro de los corchetes.
     - Mantén los números y fechas sin alterar.
 
-  user_template: "Traduce fielmente el siguiente fragmento. Responde EN ESPAÑOL. Devuelve SOLO el texto traducido, sin notas ni etiquetas.\n\n{text}"
+  user_template: "Traduce fielmente el siguiente fragmento. Responde EN ESPAÑOL.
+    Devuelve SOLO el texto traducido, sin notas ni etiquetas.
+
+
+    {text}"
 
 # ── Output ──────────────────────────────────────────────────────
 output:
