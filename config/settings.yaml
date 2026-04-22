@@ -46,7 +46,7 @@ scraper:
 translation:
   chunk_chars: 7000
   max_concurrent: 1
-  request_delay: 5.0
+  request_delay: 60.0
   temperature: 0.2
   timeout: 120
   retries: 3
@@ -61,7 +61,7 @@ glossary:
 adapter:
   active: "gemini"
   gemini:
-    model: "gemini-2.5-flash-lite"
+    model: "gemini-2.5-flash"
     api_key_env: "GEMINI_API_FREE"
   openai:
     model: "gpt-4o-mini"
