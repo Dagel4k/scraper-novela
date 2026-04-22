@@ -12,6 +12,12 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
 import yaml
+import warnings
+
+# Suppress annoying warnings
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.auth")
+warnings.filterwarnings("ignore", category=FutureWarning, module="google.oauth2")
+warnings.filterwarnings("ignore", message=".*urllib3 v2 only supports OpenSSL 1.1.1+.*")
 
 from adapters import get_adapter
 from core.domain import Glossary, IngestGlossary, TranslationRecord
@@ -64,7 +70,8 @@ def cmd_scrape(args: argparse.Namespace, settings: dict) -> int:
 #  SUBCOMMAND: translate
 # ═══════════════════════════════════════════════════════════════
 def cmd_translate(args: argparse.Namespace, settings: dict) -> int:
-    logger = setup_logger(verbose=args.verbose, debug=args.debug)
+    # Always verbose for translation to show chunk progress as requested
+    logger = setup_logger(verbose=True, debug=args.debug)
 
     # Load .env
     env_path = Path(args.env_file) if args.env_file else Path(".env")
