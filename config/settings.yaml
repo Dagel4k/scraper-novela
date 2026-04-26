@@ -61,7 +61,7 @@ glossary:
 adapter:
   active: "gemini"
   gemini:
-    model: "gemini-3-flash-preview"
+    model: "gemini-2.5-flash"
     api_key_env: "GEMINI_API_FREE"
   openai:
     model: "gpt-4o-mini"

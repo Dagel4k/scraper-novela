@@ -1,0 +1,65 @@
+/Users/daniel/Downloads/scraper novela/.venv/lib/python3.9/site-packages/google/auth/__init__.py:54: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+/Users/daniel/Downloads/scraper novela/.venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+/Users/daniel/Downloads/scraper novela/.venv/lib/python3.9/site-packages/google/oauth2/__init__.py:40: FutureWarning: You are using a Python version 3.9 past its end of life. Google will update google-auth with critical bug fixes on a best-effort basis, but not with any other fixes or features. Please upgrade your Python version, and then update google-auth.
+  warnings.warn(eol_message.format("3.9"), FutureWarning)
+--- Listando Modelos Disponibles ---
+Name: models/gemini-2.5-flash, Display: Gemini 2.5 Flash
+Name: models/gemini-2.5-pro, Display: Gemini 2.5 Pro
+Name: models/gemini-2.0-flash, Display: Gemini 2.0 Flash
+Name: models/gemini-2.0-flash-001, Display: Gemini 2.0 Flash 001
+Name: models/gemini-2.0-flash-lite-001, Display: Gemini 2.0 Flash-Lite 001
+Name: models/gemini-2.0-flash-lite, Display: Gemini 2.0 Flash-Lite
+Name: models/gemini-2.5-flash-preview-tts, Display: Gemini 2.5 Flash Preview TTS
+Name: models/gemini-2.5-pro-preview-tts, Display: Gemini 2.5 Pro Preview TTS
+Name: models/gemma-3-1b-it, Display: Gemma 3 1B
+Name: models/gemma-3-4b-it, Display: Gemma 3 4B
+Name: models/gemma-3-12b-it, Display: Gemma 3 12B
+Name: models/gemma-3-27b-it, Display: Gemma 3 27B
+Name: models/gemma-3n-e4b-it, Display: Gemma 3n E4B
+Name: models/gemma-3n-e2b-it, Display: Gemma 3n E2B
+Name: models/gemma-4-26b-a4b-it, Display: Gemma 4 26B A4B IT
+Name: models/gemma-4-31b-it, Display: Gemma 4 31B IT
+Name: models/gemini-flash-latest, Display: Gemini Flash Latest
+Name: models/gemini-flash-lite-latest, Display: Gemini Flash-Lite Latest
+Name: models/gemini-pro-latest, Display: Gemini Pro Latest
+Name: models/gemini-2.5-flash-lite, Display: Gemini 2.5 Flash-Lite
+Name: models/gemini-2.5-flash-image, Display: Nano Banana
+Name: models/gemini-3-pro-preview, Display: Gemini 3 Pro Preview
+Name: models/gemini-3-flash-preview, Display: Gemini 3 Flash Preview
+Name: models/gemini-3.1-pro-preview, Display: Gemini 3.1 Pro Preview
+Name: models/gemini-3.1-pro-preview-customtools, Display: Gemini 3.1 Pro Preview Custom Tools
+Name: models/gemini-3.1-flash-lite-preview, Display: Gemini 3.1 Flash Lite Preview
+Name: models/gemini-3-pro-image-preview, Display: Nano Banana Pro
+Name: models/nano-banana-pro-preview, Display: Nano Banana Pro
+Name: models/gemini-3.1-flash-image-preview, Display: Nano Banana 2
+Name: models/lyria-3-clip-preview, Display: Lyria 3 Clip Preview
+Name: models/lyria-3-pro-preview, Display: Lyria 3 Pro Preview
+Name: models/gemini-3.1-flash-tts-preview, Display: Gemini 3.1 Flash TTS Preview
+Name: models/gemini-robotics-er-1.5-preview, Display: Gemini Robotics-ER 1.5 Preview
+Name: models/gemini-robotics-er-1.6-preview, Display: Gemini Robotics-ER 1.6 Preview
+Name: models/gemini-2.5-computer-use-preview-10-2025, Display: Gemini 2.5 Computer Use Preview 10-2025
+Name: models/deep-research-max-preview-04-2026, Display: Deep Research Max Preview (Apr-21-2026)
+Name: models/deep-research-preview-04-2026, Display: Deep Research Preview (Apr-21-2026)
+Name: models/deep-research-pro-preview-12-2025, Display: Deep Research Pro Preview (Dec-12-2025)
+Name: models/gemini-embedding-001, Display: Gemini Embedding 001
+Name: models/gemini-embedding-2-preview, Display: Gemini Embedding 2 Preview
+Name: models/gemini-embedding-2, Display: Gemini Embedding 2
+Name: models/aqa, Display: Model that performs Attributed Question Answering.
+Name: models/imagen-4.0-generate-001, Display: Imagen 4
+Name: models/imagen-4.0-ultra-generate-001, Display: Imagen 4 Ultra
+Name: models/imagen-4.0-fast-generate-001, Display: Imagen 4 Fast
+Name: models/veo-2.0-generate-001, Display: Veo 2
+Name: models/veo-3.0-generate-001, Display: Veo 3
+Name: models/veo-3.0-fast-generate-001, Display: Veo 3 fast
+Name: models/veo-3.1-generate-preview, Display: Veo 3.1
+Name: models/veo-3.1-fast-generate-preview, Display: Veo 3.1 fast
+Name: models/veo-3.1-lite-generate-preview, Display: Veo 3.1 lite
+Name: models/gemini-2.5-flash-native-audio-latest, Display: Gemini 2.5 Flash Native Audio Latest
+Name: models/gemini-2.5-flash-native-audio-preview-09-2025, Display: Gemini 2.5 Flash Native Audio Preview 09-2025
+Name: models/gemini-2.5-flash-native-audio-preview-12-2025, Display: Gemini 2.5 Flash Native Audio Preview 12-2025
+Name: models/gemini-3.1-flash-live-preview, Display: Gemini 3.1 Flash Live Preview
+
+--- Probando gemini-1.5-flash ---
+Error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.', 'status': 'NOT_FOUND'}}
