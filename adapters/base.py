@@ -46,7 +46,7 @@ class BaseAdapter(TranslatorAdapter):
         *,
         temperature: float = 0.2,
         timeout: float = 120.0,
-        retries: int = 5,
+        retries: int = 15,
         backoff: float = 2.0,
     ) -> str:
         last_err: Optional[Exception] = None
@@ -60,7 +60,7 @@ class BaseAdapter(TranslatorAdapter):
                 last_err = exc
                 rate_limited = self._is_rate_limit(exc)
                 if attempt < retries:
-                    wait = self._backoff_seconds(attempt, exc, backoff)
+                    wait = min(self._backoff_seconds(attempt, exc, backoff), 30.0)
                     logger.warning(
                         "%s attempt %d/%d failed%s: %s — retrying in %.0fs",
                         self.adapter_name, attempt, retries,
